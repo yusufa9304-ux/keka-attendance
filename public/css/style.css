@@ -50,7 +50,7 @@ h2 { font-size: 1.15rem; }
   background: var(--card); border-bottom: 1px solid var(--line);
   padding: 0 24px; height: 66px; position: sticky; top: 0; z-index: 20;
 }
-.nav .brand { display: flex; align-items: center; gap: 10px; }
+.nav .brand { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .nav .brand-logo { height: 28px; width: auto; display: block; }
 .nav .wordmark { font-weight: 800; letter-spacing: -.045em; font-size: 1.5rem; color: var(--ink); }
 .nav .wordmark .v { color: var(--brand); }
@@ -63,15 +63,24 @@ h2 { font-size: 1.15rem; }
   font-weight: 600; font-size: .82rem; color: var(--muted);
   border-left: 1px solid var(--line); padding-left: 9px; margin-left: 1px;
 }
-.nav .links { display: flex; gap: 4px; margin-left: 10px; }
+/* A reporting manager carries seven tabs. Let the strip take the free space and
+   scroll sideways rather than squeezing every label onto two lines and shoving
+   the name block out of the bar. */
+.nav .links { display: flex; gap: 2px; margin-left: 10px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav .links::-webkit-scrollbar { display: none; }
+.nav .links button { white-space: nowrap; flex: 0 0 auto; }
 .nav .links button {
   border: 0; background: transparent; color: var(--muted); font: inherit;
-  padding: 8px 14px; border-radius: 999px; cursor: pointer; font-weight: 600;
+  /* Trimmed padding, gap and size: seven tabs is the widest strip we ship, and
+     this is what lets a reporting manager's nav fit on a 1280-wide laptop
+     without the strip having to scroll. */
+  padding: 8px 11px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .93rem;
 }
 .nav .links button.active { background: var(--brand-soft); color: var(--brand); }
 .nav .links button:hover:not(.active) { background: var(--surface); color: var(--ink); }
-.nav .spacer { flex: 1; }
-.nav .user { display: flex; align-items: center; gap: 10px; }
+.nav .spacer { flex: 0 0 auto; }
+.nav .user { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.nav .user .small { white-space: nowrap; }
 .avatar {
   width: 36px; height: 36px; border-radius: 50%; background: var(--brand);
   color: var(--brand-ink); display: grid; place-items: center; font-weight: 800; font-size: .85rem;
@@ -208,7 +217,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .loc a { font-weight: 600; }
 .punch-photo { width: 42px; height: 42px; border-radius: 9px; object-fit: cover; border: 1px solid var(--line); cursor: pointer; display: block; background: var(--surface); }
 .photo-row { display: flex; align-items: center; gap: 10px; }
-.pin { font-weight: 700; color: var(--brand); }
+.pin { font-weight: 700; color: var(--brand); display: inline-flex; align-items: center; }
+.pin svg.pin-ico { width: 12px; height: 12px; fill: currentColor; flex: 0 0 auto; }
 .ping-count { font-size: .78rem; color: var(--muted); }
 .track-note { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; font-size: .85rem; margin-top: 14px; }
 .photo-viewer { max-width: 460px; }
@@ -408,4 +418,12 @@ tbody tr:nth-child(8) { animation-delay: .25s; }
 
 @media (max-width: 380px) {
   .nav .links button { font-size: .66rem; }
+}
+
+/* On a 320px screen the logo, the role badge, the avatar and Log out do not
+   fit together. Drop the badge and tighten up rather than letting the bar
+   push the page sideways. */
+@media (max-width: 420px) {
+  .nav { gap: 10px; padding: 0 10px; }
+  #admin-tag, #nav-role-badge { display: none !important; }
 }

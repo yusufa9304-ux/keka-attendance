@@ -63,7 +63,7 @@ async function loadSites() {
     body.innerHTML = sites.map((s) => `<tr>
       <td><b>${esc(s.name)}</b><div class="muted small">${esc(s.address || '')}</div></td>
       <td class="num">${s.radius_m} m</td>
-      <td><a href="${s.map_url}" target="_blank" rel="noopener" class="small">📍 map</a></td>
+      <td><a href="${s.map_url}" target="_blank" rel="noopener" class="small"><span class="pin">${PIN_SVG}</span> map</a></td>
       <td class="num">${s.employees}</td>
       <td>${s.active ? '<span class="badge active">Active</span>' : '<span class="badge inactive">Inactive</span>'}</td>
       <td><button class="btn sm ghost" data-site-toggle="${s.id}" data-val="${s.active ? 0 : 1}">${s.active ? 'Deactivate' : 'Activate'}</button>
@@ -130,8 +130,11 @@ const photoCell = (src) => (src
   ? `<img class="punch-photo" src="${src}" alt="punch photo" onclick="viewPhoto(this.src)" />`
   : '<span class="muted small">—</span>');
 
+const PIN_SVG = '<svg class="pin-ico" viewBox="0 0 24 24" aria-hidden="true">'
+  + '<path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
+
 const locCell = (lat, lng, address, mapUrl) => (lat != null
-  ? `<a href="${mapUrl}" target="_blank" rel="noopener" class="small"><span class="pin">📍</span> ${esc(address || `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`)}</a>`
+  ? `<a href="${mapUrl}" target="_blank" rel="noopener" class="small"><span class="pin">${PIN_SVG}</span> ${esc(address || `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`)}</a>`
   : '<span class="muted small">—</span>');
 
 /** Geofence verdict + fake-GPS flag for one roster row. */

@@ -294,6 +294,9 @@ function startTracking() {
 }
 function stopTracking() { if (tracker) { tracker.stop(); tracker = null; } }
 
+const PIN_SVG = '<svg class="pin-ico" viewBox="0 0 24 24" aria-hidden="true">'
+  + '<path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
+
 const mapsUrl = (lat, lng) => (lat != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);
 const fmtCoords = (lat, lng) => `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
 
@@ -497,7 +500,7 @@ function renderUser() {
     const photo = kind === 'in' ? r.in_photo : r.out_photo;
     return `<div class="photo-row" style="justify-content:center;margin-top:10px">
       ${photo ? `<img class="punch-photo" src="${photo}" alt="${kind} photo" onclick="viewPhoto(this.src)" />` : ''}
-      <span class="loc"><span class="pin">📍</span> <a href="${mapsUrl(lat, lng)}" target="_blank" rel="noopener">${esc(addr)}</a></span>
+      <span class="loc"><span class="pin">${PIN_SVG}</span> <a href="${mapsUrl(lat, lng)}" target="_blank" rel="noopener">${esc(addr)}</a></span>
     </div>`;
   };
   const geoBadge = (r, kind) => {
@@ -537,8 +540,8 @@ function renderUser() {
       ${!t && siteForUser(u) ? `<div class="track-note" style="margin-top:14px">You are checked against <b>${esc(siteForUser(u).name)}</b> — punch within ${siteForUser(u).radius_m} m.</div>` : ''}
       <div class="small muted" style="margin-top:10px">${managerName(u) ? `Reporting to <b>${esc(managerName(u))}</b>` : 'No reporting manager set'}</div>
       <div class="track-note">${onClock
-        ? `📍 On the clock — location updates every ${PING_MIN} min (${pingsToday} update${pingsToday === 1 ? '' : 's'} so far today).`
-        : `📍 Location + a selfie are required for every punch. ${pingsToday ? pingsToday + ' location update(s) recorded today.' : ''}`}</div>
+        ? `${PIN_SVG} On the clock — location updates every ${PING_MIN} min (${pingsToday} update${pingsToday === 1 ? '' : 's'} so far today).`
+        : `${PIN_SVG} Location + a selfie are required for every punch. ${pingsToday ? pingsToday + ' location update(s) recorded today.' : ''}`}</div>
     </div>`;
   if (onClock) startTracking(); else stopTracking();
 
@@ -574,7 +577,7 @@ function renderUser() {
         <td>${fmtTime(r.clock_out)}</td>
         <td class="num">${r.worked_minutes ? fmtHours(r.worked_minutes / 60) : '—'}</td>
         <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>
-        <td class="small">${r.in_lat != null ? `<a href="${mapsUrl(r.in_lat, r.in_lng)}" target="_blank" rel="noopener"><span class="pin">📍</span> ${esc(r.in_address || fmtCoords(r.in_lat, r.in_lng))}</a>` : '<span class="muted">—</span>'}</td>
+        <td class="small">${r.in_lat != null ? `<a href="${mapsUrl(r.in_lat, r.in_lng)}" target="_blank" rel="noopener"><span class="pin">${PIN_SVG}</span> ${esc(r.in_address || fmtCoords(r.in_lat, r.in_lng))}</a>` : '<span class="muted">—</span>'}</td>
         <td>${siteCell(r)}</td>
         <td><span class="badge ${r.status}">${label(r.status)}</span></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No records in this range.</td></tr>'}</tbody></table></div>`;
   } else if (ui.tab === 'leave') {
@@ -679,7 +682,7 @@ function renderAdmin() {
 
   let panel = '';
   const locCell = (lat, lng, address) => (lat != null
-    ? `<a href="${mapsUrl(lat, lng)}" target="_blank" rel="noopener" class="small"><span class="pin">📍</span> ${esc(address || fmtCoords(lat, lng))}</a>`
+    ? `<a href="${mapsUrl(lat, lng)}" target="_blank" rel="noopener" class="small"><span class="pin">${PIN_SVG}</span> ${esc(address || fmtCoords(lat, lng))}</a>`
     : '<span class="muted small">—</span>');
   const photoCell = (src) => (src
     ? `<img class="punch-photo" src="${src}" alt="punch photo" onclick="viewPhoto(this.src)" />`
@@ -777,7 +780,7 @@ function renderAdmin() {
         return `<tr>
           <td><b>${esc(s.name)}</b><div class="muted small">${esc(s.address || '')}</div></td>
           <td class="num">${s.radius_m} m</td>
-          <td>${s.lat != null ? `<a href="${mapsUrl(s.lat, s.lng)}" target="_blank" rel="noopener" class="small">📍 map</a>` : '—'}</td>
+          <td>${s.lat != null ? `<a href="${mapsUrl(s.lat, s.lng)}" target="_blank" rel="noopener" class="small"><span class="pin">${PIN_SVG}</span> map</a>` : '—'}</td>
           <td class="num">${staff.length}</td>
           <td>${s.active === false ? '<span class="badge inactive">Inactive</span>' : '<span class="badge active">Active</span>'}</td>
           <td><button class="btn sm ghost" data-site-toggle="${s.id}">${s.active === false ? 'Activate' : 'Deactivate'}</button>
@@ -795,8 +798,8 @@ function renderAdmin() {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap"><h2>Monthly summary</h2>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="month" id="rep-month" value="${month}" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px" />
-          <button class="btn sm" id="export-csv">⬇ CSV</button>
-          <button class="btn sm primary" id="export-xlsx">⬇ Excel</button>
+          <button class="btn sm" id="export-csv">↓ CSV</button>
+          <button class="btn sm primary" id="export-xlsx">↓ Excel</button>
         </div></div>
       <p class="small muted">Payroll-ready sheet — present days, LOP, payable days, hours, overtime, late marks, geofence violations and GPS flags.</p>
       <table><thead><tr><th>Employee</th><th>Department</th><th class="num">Present</th><th class="num">Half</th><th class="num">Absent</th><th class="num">Leave</th><th class="num">Hours</th></tr></thead>
@@ -804,7 +807,18 @@ function renderAdmin() {
         <td>${esc(r.e.department || '—')}</td><td class="num">${r.present}</td><td class="num">${r.half}</td><td class="num">${r.absent}</td><td class="num">${r.leave}</td><td class="num">${r.hours}</td></tr>`).join('')}
       <tr style="font-weight:700;background:var(--brand-soft)"><td>Total</td><td></td><td class="num">${totals.present}</td><td class="num">—</td><td class="num">${totals.absent}</td><td class="num">—</td><td class="num">${totals.hours}</td></tr></tbody></table></div>`;
   }
-  mainEl().innerHTML = head + panel;
+  // The stat tiles and the pending card belong to Team Today. On the other tabs
+  // they sat above unrelated content and read as the wrong page.
+  const TITLES = {
+    team: 'Team dashboard', locations: 'Live locations', approvals: 'Approvals',
+    employees: 'Employees', sites: 'Showrooms & geofences', reports: 'Monthly summary',
+  };
+  const pageHead = ui.tab === 'team' ? head : `
+    <div class="page-head">
+      <div><h1>${TITLES[ui.tab] || 'Console'}</h1><p class="muted">${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+      <button class="btn" id="refresh">↻ Refresh</button>
+    </div>`;
+  mainEl().innerHTML = pageHead + panel;
   bindAdmin();
 }
 

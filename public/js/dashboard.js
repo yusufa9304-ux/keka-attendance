@@ -80,10 +80,13 @@ const locLine = (a, kind) => {
   const spoofBadge = spoof && spoof.suspected ? `<span class="badge pending">GPS check ${spoof.score}/100</span>` : '';
   return `<div class="photo-row" style="justify-content:center;margin-top:10px">
       ${photo ? `<img class="punch-photo" src="${photo}" alt="${kind} photo" onclick="viewPhoto(this.src)" />` : ''}
-      <span class="loc"><span class="pin">📍</span> <a href="${url}" target="_blank" rel="noopener">${esc(addr)}</a></span>
+      <span class="loc"><span class="pin">${PIN_SVG}</span> <a href="${url}" target="_blank" rel="noopener">${esc(addr)}</a></span>
     </div>
     ${geoBadge || spoofBadge ? `<div style="margin-top:6px">${geoBadge} ${spoofBadge}</div>` : ''}`;
 };
+
+const PIN_SVG = '<svg class="pin-ico" viewBox="0 0 24 24" aria-hidden="true">'
+  + '<path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
 
 /* ---- today ---- */
 async function loadToday() {
@@ -105,7 +108,7 @@ async function loadToday() {
       ? `<div class="track-note" style="margin-top:14px">You are checked against <b>${esc(attendanceSite.name)}</b> — punch within ${attendanceSite.radius_m} m.</div>`
       : '';
     btnIn.disabled = false; btnOut.disabled = true;
-    noteEl.textContent = '📍 Location + a selfie are required for every punch.';
+    noteEl.textContent = 'Location and a selfie are required for every punch.';
     stopTracking();
     return;
   }
@@ -123,10 +126,10 @@ async function loadToday() {
 
   const onClock = !!attendance.clock_in && !attendance.clock_out;
   if (onClock) {
-    noteEl.textContent = `📍 On the clock — location updates every ${PING_MIN} min (${pings} update${pings === 1 ? '' : 's'} so far today).`;
+    noteEl.textContent = `On the clock — location updates every ${PING_MIN} min (${pings} update${pings === 1 ? '' : 's'} so far today).`;
     startTracking();
   } else {
-    noteEl.textContent = `📍 Tracking stopped. ${pings} location update${pings === 1 ? '' : 's'} recorded today.`;
+    noteEl.textContent = `Tracking stopped. ${pings} location update${pings === 1 ? '' : 's'} recorded today.`;
     stopTracking();
   }
 }
@@ -205,7 +208,7 @@ async function loadHistory() {
       <td>${fmtTime(r.clock_in)}${r.is_late ? ' <span class="badge half_day" style="font-size:.7rem">late</span>' : ''}</td>
       <td>${fmtTime(r.clock_out)}</td>
       <td class="num">${r.worked_minutes ? fmtHours(r.worked_minutes / 60) : '—'}</td>
-      <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>        <td class="small">${r.in_map_url ? `<a href="${r.in_map_url}" target="_blank" rel="noopener"><span class="pin">📍</span> ${esc(r.in_address || 'View map')}</a>` : '<span class="muted">—</span>'}</td>
+      <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>        <td class="small">${r.in_map_url ? `<a href="${r.in_map_url}" target="_blank" rel="noopener"><span class="pin">${PIN_SVG}</span> ${esc(r.in_address || 'View map')}</a>` : '<span class="muted">—</span>'}</td>
         <td>${histSiteCell(r)}</td>
         <td><span class="badge ${r.status}">${label(r.status)}</span></td>
     </tr>`).join('');
