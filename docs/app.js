@@ -232,7 +232,7 @@ function renderUser() {
       <div class="date" id="live-date">—</div>
       <div class="actions">
         <button class="btn primary" id="btn-in" ${t && t.clock_in ? 'disabled' : ''}>Clock in</button>
-        <button class="btn green" id="btn-out" ${!t || !t.clock_in || t.clock_out ? 'disabled' : ''}>Clock out</button>
+        <button class="btn dark" id="btn-out" ${!t || !t.clock_in || t.clock_out ? 'disabled' : ''}>Clock out</button>
       </div>
       <div class="punch-meta">
         <div><div class="k">Clock in</div><div class="v">${fmtTime(t && t.clock_in)}</div></div>

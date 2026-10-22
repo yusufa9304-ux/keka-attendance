@@ -227,7 +227,7 @@ Runs 28 checks against a live server: auth, role guards, punching, leave and reg
 
 ## Branding
 
-The UI uses Vutto's brand palette — Vutto yellow (`#FFD400`) with near-black ink on warm neutrals. To re-skin, edit the CSS custom properties at the top of `public/css/style.css` (and `docs/style.css` for the static build).
+The UI uses Vutto's brand palette, taken from vutto.in — **Vutto red `#E4002B`** with white and near-black, red pill buttons and soft pink tints. To re-skin, edit the CSS custom properties at the top of `public/css/style.css` (and `docs/style.css` for the static build).
 
 ## License
 
