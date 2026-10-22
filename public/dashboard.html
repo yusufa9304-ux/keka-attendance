@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Attendance — Keka</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="logo">K</span> Keka Attendance</div>
+    <div class="links">
+      <button class="active" data-tab="home">My Day</button>
+      <button data-tab="history">My Attendance</button>
+      <button data-tab="leave">Leaves</button>
+      <button data-tab="reg">Regularization</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="user">
+      <div class="avatar" id="nav-avatar">--</div>
+      <div class="small">
+        <div id="nav-name" style="font-weight:600">…</div>
+        <div class="muted" id="nav-role">Employee</div>
+      </div>
+      <button class="btn sm ghost" onclick="logout()">Log out</button>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>Hi, <span id="first-name">there</span> 👋</h1>
+        <p class="muted" id="head-sub">Here's your day at a glance.</p>
+      </div>
+    </div>
+
+    <!-- ============ HOME ============ -->
+    <section data-panel="home">
+      <div class="grid cols-2">
+        <div class="card clock">
+          <div class="now" id="live-clock">--:--:--</div>
+          <div class="date" id="live-date">—</div>
+          <div class="actions">
+            <button class="btn primary" id="btn-in">Clock in</button>
+            <button class="btn green" id="btn-out" disabled>Clock out</button>
+          </div>
+          <div class="punch-meta">
+            <div><div class="k">Clock in</div><div class="v" id="today-in">—</div></div>
+            <div><div class="k">Clock out</div><div class="v" id="today-out">—</div></div>
+            <div><div class="k">Worked</div><div class="v" id="today-worked">—</div></div>
+            <div><div class="k">Status</div><div class="v" id="today-status">—</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>This month</h2>
+          <div class="grid cols-2" style="gap:14px">
+            <div class="stat"><span class="label">Present</span><span class="value" id="m-present">0</span><span class="sub">days</span></div>
+            <div class="stat"><span class="label">Half days</span><span class="value" id="m-half">0</span><span class="sub">days</span></div>
+            <div class="stat"><span class="label">Absent</span><span class="value" id="m-absent">0</span><span class="sub">days</span></div>
+            <div class="stat"><span class="label">Hours</span><span class="value" id="m-hours">0</span><span class="sub">total</span></div>
+          </div>
+          <hr style="border:0;border-top:1px solid var(--line);margin:16px 0" />
+          <div class="stat"><span class="label">Leave balance</span><span class="value" id="leave-bal">—</span><span class="sub" id="leave-sub">days remaining</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HISTORY ============ -->
+    <section data-panel="history" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+          <h2>Attendance history</h2>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label class="small muted">From</label><input type="date" id="hist-from" class="field" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px" />
+            <label class="small muted">To</label><input type="date" id="hist-to" class="field" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px" />
+            <button class="btn sm" id="hist-go">Apply</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Status</th><th>Note</th></tr></thead>
+          <tbody id="hist-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ LEAVE ============ -->
+    <section data-panel="leave" class="hidden">
+      <div class="grid cols-2">
+        <div class="card">
+          <h2>My leave requests</h2>
+          <table>
+            <thead><tr><th>Type</th><th>From → To</th><th class="num">Days</th><th>Status</th><th></th></tr></thead>
+            <tbody id="leave-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h2>Apply for leave</h2>
+          <div class="field"><label>Leave type</label><select id="lv-type"></select></div>
+          <div class="row2">
+            <div class="field"><label>From</label><input type="date" id="lv-start" /></div>
+            <div class="field"><label>To</label><input type="date" id="lv-end" /></div>
+          </div>
+          <div class="field"><label>Reason</label><textarea id="lv-reason" rows="3" placeholder="Optional note for your manager"></textarea></div>
+          <button class="btn primary" id="lv-submit">Submit request</button>
+          <div class="small muted" id="lv-hint" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ REGULARIZATION ============ -->
+    <section data-panel="reg" class="hidden">
+      <div class="grid cols-2">
+        <div class="card">
+          <h2>My regularization requests</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Requested</th><th>Status</th></tr></thead>
+            <tbody id="reg-body"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h2>Raise a regularization</h2>
+          <p class="small muted">Missed a punch or clocked in late by mistake? Ask your admin to correct it.</p>
+          <div class="field"><label>Date</label><input type="date" id="rg-date" /></div>
+          <div class="row2">
+            <div class="field"><label>Correct clock in</label><input type="time" id="rg-in" /></div>
+            <div class="field"><label>Correct clock out</label><input type="time" id="rg-out" /></div>
+          </div>
+          <div class="field"><label>Reason</label><textarea id="rg-reason" rows="3" placeholder="e.g. Forgot to clock out"></textarea></div>
+          <button class="btn primary" id="rg-submit">Submit request</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

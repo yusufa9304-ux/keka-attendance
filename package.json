@@ -1,0 +1,29 @@
+{
+  "name": "keka-attendance",
+  "version": "1.0.0",
+  "description": "Keka-style attendance management system with User and Admin roles (Node + Express + SQLite)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node src/seed.js",
+    "reset": "node src/seed.js --reset"
+  },
+  "keywords": [
+    "attendance",
+    "hrms",
+    "keka",
+    "express",
+    "sqlite"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

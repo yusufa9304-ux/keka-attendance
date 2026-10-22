@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Keka Attendance</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="logo">K</span> Keka Attendance <span class="badge role-admin" style="margin-left:6px">Admin</span></div>
+    <div class="links">
+      <button class="active" data-tab="team">Team Today</button>
+      <button data-tab="approvals">Approvals <span id="appr-dot" class="badge pending" style="display:none">0</span></button>
+      <button data-tab="employees">Employees</button>
+      <button data-tab="reports">Reports</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="user">
+      <div class="avatar" id="nav-avatar">--</div>
+      <div class="small">
+        <div id="nav-name" style="font-weight:600">…</div>
+        <div class="muted">Administrator</div>
+      </div>
+      <button class="btn sm ghost" onclick="logout()">Log out</button>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>Team dashboard</h1>
+        <p class="muted" id="head-date">—</p>
+      </div>
+      <button class="btn" onclick="refreshAll()">↻ Refresh</button>
+    </div>
+
+    <div class="grid cols-4" style="margin-bottom:18px">
+      <div class="card stat"><span class="label">Employees</span><span class="value" id="s-total">0</span><span class="sub">active</span></div>
+      <div class="card stat"><span class="label">Present today</span><span class="value" id="s-present">0</span><span class="sub">clocked in</span></div>
+      <div class="card stat"><span class="label">Working now</span><span class="value" id="s-working">0</span><span class="sub">not clocked out</span></div>
+      <div class="card stat"><span class="label">On leave / absent</span><span class="value" id="s-away">0</span><span class="sub" id="s-away-sub">—</span></div>
+    </div>
+
+    <!-- ============ TEAM ============ -->
+    <section data-panel="team">
+      <div class="card">
+        <h2>Team status — today</h2>
+        <table>
+          <thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>State</th></tr></thead>
+          <tbody id="team-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ APPROVALS ============ -->
+    <section data-panel="approvals" class="hidden">
+      <div class="tabs">
+        <button class="active" data-atab="leaves">Leave requests</button>
+        <button data-atab="regs">Regularizations</button>
+      </div>
+      <div class="card" data-apanel="leaves">
+        <h2>Leave requests</h2>
+        <table>
+          <thead><tr><th>Employee</th><th>Type</th><th>From → To</th><th class="num">Days</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+          <tbody id="leaves-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card hidden" data-apanel="regs">
+        <h2>Regularization requests</h2>
+        <table>
+          <thead><tr><th>Employee</th><th>Date</th><th>Requested</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+          <tbody id="regs-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ EMPLOYEES ============ -->
+    <section data-panel="employees" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h2>Employees</h2>
+          <button class="btn primary sm" onclick="openAdd()">+ Add employee</button>
+        </div>
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
+          <tbody id="emp-body"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ REPORTS ============ -->
+    <section data-panel="reports" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+          <h2>Monthly summary</h2>
+          <input type="month" id="rep-month" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px" />
+        </div>
+        <table>
+          <thead><tr><th>Employee</th><th>Department</th><th class="num">Present</th><th class="num">Half</th><th class="num">Absent</th><th class="num">Leave</th><th class="num">Hours</th></tr></thead>
+          <tbody id="rep-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Add employee modal -->
+  <div class="modal-bg" id="modal">
+    <div class="modal">
+      <h2>Add employee</h2>
+      <div class="field"><label>Full name</label><input id="e-name" placeholder="e.g. Meera Joshi" /></div>
+      <div class="field"><label>Work email</label><input id="e-email" type="email" placeholder="name@company.com" /></div>
+      <div class="row2">
+        <div class="field"><label>Password</label><input id="e-pass" placeholder="Temp password" /></div>
+        <div class="field"><label>Employee code</label><input id="e-code" placeholder="KKA-0006" /></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Department</label><input id="e-dept" placeholder="Engineering" /></div>
+        <div class="field"><label>Role</label><select id="e-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
+      </div>
+      <div class="field"><label>Leave balance (days)</label><input id="e-bal" type="number" value="18" /></div>
+      <div class="foot">
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn primary" id="e-save">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

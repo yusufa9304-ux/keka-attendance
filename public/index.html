@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keka Attendance — Sign in</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-hero">
+      <div class="logo" style="width:44px;height:44px;border-radius:12px;font-size:1.2rem;margin-bottom:24px">K</div>
+      <h1>Attendance that runs itself.</h1>
+      <p>Clock in and out, apply for leave, and track your month — while admins see the whole team in real time.</p>
+      <ul>
+        <li>Web punch in / punch out with live status</li>
+        <li>Leave requests with an approval workflow</li>
+        <li>Regularization for missed punches</li>
+        <li>Team dashboard and monthly reports</li>
+      </ul>
+    </div>
+    <div class="login-panel">
+      <div class="login-box">
+        <h1>Sign in</h1>
+        <p class="muted small">Use your work email to continue.</p>
+        <form id="login-form" style="margin-top:20px">
+          <div class="field">
+            <label for="email">Work email</label>
+            <input id="email" type="email" autocomplete="username" placeholder="you@company.com" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          </div>
+          <button class="btn primary" style="width:100%;justify-content:center" type="submit" id="submit-btn">Sign in</button>
+        </form>
+
+        <div class="demo-creds">
+          <div><b>Admin</b> — admin@keka.demo / Admin@123</div>
+          <div><b>User</b> — aarav@keka.demo / User@123</div>
+          <button class="btn sm ghost" id="fill-admin" type="button">Use admin</button>
+          <button class="btn sm ghost" id="fill-user" type="button">Use employee</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/login.js"></script>
+</body>
+</html>
