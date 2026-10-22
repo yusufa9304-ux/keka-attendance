@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+import { seedIfEmpty } from './src/seed.js';
 import authRoutes from './src/routes/auth.js';
 import attendanceRoutes from './src/routes/attendance.js';
 import leaveRoutes from './src/routes/leave.js';
@@ -53,6 +54,9 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Keka Attendance running on http://localhost:${PORT}`);
+// Make sure a fresh deployment (e.g. a hosted Space) has demo data on boot.
+seedIfEmpty();
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Vutto Attendance running on http://0.0.0.0:${PORT}`);
 });

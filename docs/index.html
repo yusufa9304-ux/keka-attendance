@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vutto Attendance</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<!-- ============================ LOGIN ============================ -->
+<div id="login-view">
+  <div class="login-shell">
+    <div class="login-hero">
+      <div class="hero-logo">V</div>
+      <h1>Clock in. Ride out.</h1>
+      <p>The Vutto attendance desk — punch in and out, apply for leave, and track your month, while admins see the whole team live.</p>
+      <ul>
+        <li>Web punch in / punch out with live status</li>
+        <li>Leave requests with an approval workflow</li>
+        <li>Regularization for missed punches</li>
+        <li>Team dashboard and monthly reports</li>
+      </ul>
+    </div>
+    <div class="login-panel">
+      <div class="login-box">
+        <div class="wm">vutto<span>Attendance</span></div>
+        <h1>Sign in</h1>
+        <p class="muted small">Use your work email to continue.</p>
+        <form id="login-form" style="margin-top:20px">
+          <div class="field">
+            <label for="email">Work email</label>
+            <input id="email" type="email" placeholder="you@vutto.in" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+          </div>
+          <button class="btn primary" style="width:100%;justify-content:center" type="submit">Sign in</button>
+        </form>
+        <div class="demo-creds">
+          <div><b>Admin</b> — admin@vutto.demo / Admin@123</div>
+          <div><b>User</b> — aarav@vutto.demo / User@123</div>
+          <button class="btn sm ghost" id="fill-admin" type="button">Use admin</button>
+          <button class="btn sm ghost" id="fill-user" type="button">Use employee</button>
+        </div>
+        <p class="small muted" style="margin-top:14px">Demo build — data lives in your browser only.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ APP ============================ -->
+<div id="app-view" class="hidden">
+  <nav class="nav">
+    <div class="brand">
+      <span class="logo">V</span>
+      <span class="wordmark">vutto</span>
+      <span class="brand-sub">Attendance</span>
+      <span class="badge role-admin hidden" id="admin-tag" style="margin-left:4px">Admin</span>
+    </div>
+    <div class="links" id="nav-links"></div>
+    <div class="spacer"></div>
+    <div class="user">
+      <div class="avatar" id="nav-avatar">--</div>
+      <div class="small">
+        <div id="nav-name" style="font-weight:600">…</div>
+        <div class="muted" id="nav-role">Employee</div>
+      </div>
+      <button class="btn sm ghost" id="logout">Log out</button>
+    </div>
+  </nav>
+  <div class="wrap" id="main"></div>
+  <div class="vutto-foot">Vutto Attendance · demo build</div>
+</div>
+
+<div class="modal-bg" id="modal"><div class="modal" id="modal-body"></div></div>
+<script src="./app.js"></script>
+</body>
+</html>

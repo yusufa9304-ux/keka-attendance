@@ -8,11 +8,11 @@ const form = document.getElementById('login-form');
 const btn = document.getElementById('submit-btn');
 
 document.getElementById('fill-admin').onclick = () => {
-  document.getElementById('email').value = 'admin@keka.demo';
+  document.getElementById('email').value = 'admin@vutto.demo';
   document.getElementById('password').value = 'Admin@123';
 };
 document.getElementById('fill-user').onclick = () => {
-  document.getElementById('email').value = 'aarav@keka.demo';
+  document.getElementById('email').value = 'aarav@vutto.demo';
   document.getElementById('password').value = 'User@123';
 };
 

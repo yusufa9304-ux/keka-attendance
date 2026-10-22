@@ -61,9 +61,9 @@ try {
   check('health 200', r.status === 200 && r.data.ok);
 
   console.log('\n[auth]');
-  r = await admin('/api/auth/login', { method: 'POST', body: { email: 'admin@keka.demo', password: 'Admin@123' } });
+  r = await admin('/api/auth/login', { method: 'POST', body: { email: 'admin@vutto.demo', password: 'Admin@123' } });
   check('admin login', r.status === 200 && r.data.user.role === 'admin', JSON.stringify(r.data));
-  r = await anon('/api/auth/login', { method: 'POST', body: { email: 'admin@keka.demo', password: 'wrong' } });
+  r = await anon('/api/auth/login', { method: 'POST', body: { email: 'admin@vutto.demo', password: 'wrong' } });
   check('bad password rejected', r.status === 401);
 
   console.log('\n[admin dashboard]');
@@ -73,7 +73,7 @@ try {
   console.log('    stats:', JSON.stringify(r.data.stats), 'pending:', JSON.stringify(r.data.pending));
 
   console.log('\n[admin employee management]');
-  r = await admin('/api/admin/employees', { method: 'POST', body: { name: 'Test Emp', email: 'test@keka.demo', password: 'Test@123', role: 'user', department: 'QA', employee_code: 'KKA-0099' } });
+  r = await admin('/api/admin/employees', { method: 'POST', body: { name: 'Test Emp', email: 'test@vutto.demo', password: 'Test@123', role: 'user', department: 'QA', employee_code: 'KKA-0099' } });
   check('create employee 201', r.status === 201 && r.data.employee.id, JSON.stringify(r.data));
   const newId = r.data.employee?.id;
   r = await admin('/api/admin/employees/' + newId, { method: 'PATCH', body: { role: 'admin' } });
@@ -102,7 +102,7 @@ try {
   check('report 200', r.status === 200 && Array.isArray(r.data.records), JSON.stringify(r.data).slice(0, 120));
 
   console.log('\n[user login + punch]');
-  r = await user('/api/auth/login', { method: 'POST', body: { email: 'aarav@keka.demo', password: 'User@123' } });
+  r = await user('/api/auth/login', { method: 'POST', body: { email: 'aarav@vutto.demo', password: 'User@123' } });
   check('user login', r.status === 200 && r.data.user.role === 'user');
   r = await user('/api/admin/dashboard');
   check('user blocked from admin', r.status === 403, 'got ' + r.status);

@@ -1,8 +1,10 @@
-# Keka Attendance
+# Vutto Attendance
 
-A Keka-style **attendance management system** with two roles — **User** (employee) and **Admin** — built as a full-stack app with a real database, session-based login, and an approval workflow.
+A **Vutto-branded attendance management system** with two roles — **User** (employee) and **Admin** — built as a full-stack app with a real database, session-based login, and an approval workflow.
 
-Node.js + Express + SQLite (`better-sqlite3`) on the backend, plain HTML/CSS/JS on the frontend. No build step, no framework — clone it and run.
+Node.js + Express + SQLite (`better-sqlite3`) on the backend, plain HTML/CSS/JS on the frontend. No build step.
+
+> **Live demo:** a self-contained static build (same UI, data kept in your browser) is served from `/docs` via GitHub Pages — see [Live demo](#live-demo).
 
 ---
 
@@ -10,8 +12,8 @@ Node.js + Express + SQLite (`better-sqlite3`) on the backend, plain HTML/CSS/JS 
 
 ### Employee (User)
 - **Session login** with hashed passwords (bcrypt).
-- **Web punch in / punch out** with a live clock, and today's worked hours + status.
-- **My attendance** — filterable history (last 30 days by default), late-punch marker, worked hours.
+- **Web punch in / punch out** with a live clock, today's worked hours and status.
+- **My attendance** — filterable history, late-punch marker, worked hours.
 - **Monthly summary** — present / half-day / absent days and total hours.
 - **Leave management** — apply for casual / sick / earned / loss-of-pay leave, see remaining balance, cancel a pending request.
 - **Regularization** — raise a request to correct a missed or wrong punch.
@@ -55,7 +57,7 @@ Approving a leave marks the affected working days as `on_leave` and deducts the 
 git clone <your-repo-url>
 cd keka-attendance
 npm install
-npm run seed        # creates the DB with demo users + sample history
+npm run seed        # optional — the server also auto-seeds an empty database on first boot
 npm start           # http://localhost:3000
 ```
 
@@ -65,24 +67,53 @@ Open http://localhost:3000 and sign in with a demo account below.
 
 | Role | Email | Password |
 |---|---|---|
-| **Admin** | `admin@keka.demo` | `Admin@123` |
-| **User** | `aarav@keka.demo` | `User@123` |
-| User | `priya@keka.demo` | `User@123` |
-| User | `rahul@keka.demo` | `User@123` |
-| User | `sneha@keka.demo` | `User@123` |
+| **Admin** | `admin@vutto.demo` | `Admin@123` |
+| **User** | `aarav@vutto.demo` | `User@123` |
+| User | `priya@vutto.demo` | `User@123` |
+| User | `rahul@vutto.demo` | `User@123` |
+| User | `sneha@vutto.demo` | `User@123` |
 
 > These are seed/demo credentials only. Create real accounts through the admin UI and change them before any real use.
 
 ---
 
+## Live demo
+
+The `docs/` folder holds a **self-contained static build** of the app — the same screens, roles and flows, with state kept in the browser's `localStorage` instead of a server. It is published with **GitHub Pages** (source: `main` branch, `/docs` folder):
+
+```
+https://<your-username>.github.io/keka-attendance/
+```
+
+It needs no backend, so it is handy for a quick look or a share link. The full-stack app (real database, sessions, REST API) is the code in the repo root — run it locally or deploy it with the bundled `Dockerfile`.
+
+---
+
+## Deploying the full-stack app
+
+A `Dockerfile` is included. It listens on port `7860` and stores SQLite at `/tmp/attendance.db`, seeding demo data automatically on first boot.
+
+**Any container host** (Render, Railway, Fly.io, a VPS):
+
+```bash
+docker build -t vutto-attendance .
+docker run -p 7860:7860 vutto-attendance
+```
+
+**Render / Railway:** point the service at this repo — they detect the `Dockerfile` and build it. Set `SESSION_SECRET` to a long random string so sessions survive restarts.
+
+> The container filesystem is ephemeral, so data resets when the container restarts (demo data is re-seeded on boot). For persistence, mount a volume and set `DB_FILE` to a path on it, or swap SQLite for Postgres.
+
+---
+
 ## Configuration
 
-Copy `.env.example` to `.env` (or just export the vars) if you want to override defaults:
+Copy `.env.example` to `.env` (or export the vars):
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `3000` | HTTP port |
-| `SESSION_SECRET` | random per boot | Signing secret for session cookies. **Set this in production** so sessions survive restarts. |
+| `SESSION_SECRET` | random per boot | Signing secret for session cookies. **Set this in production.** |
 | `DB_FILE` | `data/attendance.db` | SQLite file location |
 | `NODE_ENV` | — | Set to `production` to mark cookies `secure` (requires HTTPS) |
 
@@ -136,22 +167,28 @@ All routes are JSON. Auth is cookie-based; call `POST /api/auth/login` first.
 ```
 keka-attendance/
 ├── server.js                 # Express app, session, static + page routes
+├── Dockerfile                # container build for the full-stack app
 ├── package.json
 ├── src/
 │   ├── db.js                 # SQLite connection + schema + date helpers
-│   ├── seed.js               # demo data (npm run seed)
+│   ├── seed.js               # demo data (npm run seed) + auto-seed on first boot
 │   ├── middleware/auth.js    # requireAuth / requireAdmin
 │   └── routes/
 │       ├── auth.js           # login / logout / me
 │       ├── attendance.js     # punch, history, summary, regularization
 │       ├── leave.js          # apply, balance, cancel
 │       └── admin.js          # dashboard, employees, approvals, reports
-└── public/
-    ├── index.html            # login
-    ├── dashboard.html        # employee console
-    ├── admin.html            # admin console
-    ├── css/style.css
-    └── js/{api,login,dashboard,admin}.js
+├── public/                   # full-stack frontend
+│   ├── index.html            # login
+│   ├── dashboard.html        # employee console
+│   ├── admin.html            # admin console
+│   ├── css/style.css         # Vutto theme
+│   └── js/{api,login,dashboard,admin}.js
+├── docs/                     # static demo build (served by GitHub Pages)
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+└── test/api.test.mjs         # end-to-end API tests (28 checks)
 ```
 
 ---
@@ -165,11 +202,19 @@ keka-attendance/
 
 ---
 
-## Notes & next steps
+## Tests
 
-- Sessions use the in-memory store, which is fine for local/demo use. For production, swap in a persistent session store (e.g. `connect-sqlite3` or Redis) and set a fixed `SESSION_SECRET`.
-- The default work-day constants (start 09:30, end 18:30, 8h full day) live in `src/db.js` (`WORK`).
-- Natural extensions: shift schedules, holidays calendar, biometric/geo-fenced punches, CSV export, and email notifications.
+```bash
+npm run seed && node test/api.test.mjs
+```
+
+Runs 28 checks against a live server: auth, role guards, punching, leave and regularization approval flows, employee management, and reports.
+
+---
+
+## Branding
+
+The UI uses Vutto's brand palette — Vutto yellow (`#FFD400`) with near-black ink on warm neutrals. To re-skin, edit the CSS custom properties at the top of `public/css/style.css` (and `docs/style.css` for the static build).
 
 ## License
 
