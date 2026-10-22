@@ -90,6 +90,19 @@ DB.location_pings ||= [];
 DB.seq = DB.seq || {};
 DB.seq.p ||= (DB.location_pings.length + 1);
 
+/* Safety net: a demo must never end up with no active admin, or nobody could
+   reach the admin console again. If that happens, restore the demo admin. */
+(function ensureAnActiveAdmin() {
+  if (DB.users.some((u) => u.role === 'admin' && u.status === 'active')) return;
+  const a = DB.users.find((u) => String(u.email).toLowerCase() === 'admin@vutto.demo');
+  if (a) { a.role = 'admin'; a.status = 'active'; }
+  else DB.users.push({
+    id: DB.seq.u++, name: 'Yusuf Admin', email: 'admin@vutto.demo', password: 'Admin@123',
+    role: 'admin', department: 'HR', employee_code: 'VUT-0001', status: 'active', leave_balance: 18,
+  });
+  persist();
+})();
+
 const ui = {
   tab: null, atab: null,
   histFrom: addDays(todayStr(), -29), histTo: todayStr(),
@@ -285,6 +298,12 @@ function addEmployee(body) {
 function patchEmployee(id, patch) {
   const u = DB.users.find((x) => x.id === id);
   if (!u) return;
+  // Never let an admin lock themselves out of the admin console.
+  const self = me();
+  if (self && id === self.id) {
+    if (patch.role && patch.role !== 'admin') return toast("You can't change your own role — ask another admin.", true);
+    if (patch.status && patch.status !== 'active') return toast("You can't deactivate your own account.", true);
+  }
   Object.assign(u, patch);
   persist(); toast('Employee updated'); render();
 }
@@ -552,8 +571,10 @@ function renderAdmin() {
         <td>${esc(e.department || '—')}</td>
         <td><span class="badge ${e.role === 'admin' ? 'role-admin' : 'present'}">${label(e.role)}</span></td>
         <td class="num">${e.leave_balance}</td><td><span class="badge ${e.status}">${label(e.status)}</span></td>
-        <td><button class="btn sm ghost" data-role="${e.id}" data-val="${e.role === 'admin' ? 'user' : 'admin'}">${e.role === 'admin' ? 'Make user' : 'Make admin'}</button>
-        <button class="btn sm ghost" data-status="${e.id}" data-val="${e.status === 'active' ? 'inactive' : 'active'}">${e.status === 'active' ? 'Deactivate' : 'Activate'}</button></td></tr>`).join('')}</tbody></table></div>`;
+        <td>${e.id === me().id
+          ? '<span class="muted small">This is you</span>'
+          : `<button class="btn sm ghost" data-role="${e.id}" data-val="${e.role === 'admin' ? 'user' : 'admin'}">${e.role === 'admin' ? 'Make user' : 'Make admin'}</button>
+        <button class="btn sm ghost" data-status="${e.id}" data-val="${e.status === 'active' ? 'inactive' : 'active'}">${e.status === 'active' ? 'Deactivate' : 'Activate'}</button>`}</td></tr>`).join('')}</tbody></table></div>`;
   } else {
     const month = ui.repMonth;
     const recs = DB.users.filter((x) => x.role === 'user').map((e) => {
@@ -650,7 +671,9 @@ document.getElementById('login-form').onsubmit = (e) => {
   if (!u) return toast('Invalid email or password', true);
   if (u.status !== 'active') return toast('This account has been deactivated. Contact your admin.', true);
   DB.session = u.id; persist();
+  // Reset any stale tab from a previous session so the right console opens.
   ui.tab = u.role === 'admin' ? 'team' : 'home';
+  ui.atab = 'leaves';
   render();
 };
 document.getElementById('fill-admin').onclick = () => { document.getElementById('email').value = 'admin@vutto.demo'; document.getElementById('password').value = 'Admin@123'; };

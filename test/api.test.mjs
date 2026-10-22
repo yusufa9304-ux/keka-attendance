@@ -86,6 +86,14 @@ try {
   r = await admin('/api/admin/employees', { method: 'POST', body: { name: 'Auto Code', email: 'auto@vutto.demo', password: 'Test@123' } });
   check('employee id auto-generated', r.status === 201 && /^VUT-\d{4}$/.test(r.data.employee?.employee_code || ''), JSON.stringify(r.data.employee));
 
+  const meId = (await admin('/api/auth/me')).data.user.id;
+  r = await admin('/api/admin/employees/' + meId, { method: 'PATCH', body: { role: 'user' } });
+  check('admin cannot demote themselves', r.status === 400, 'got ' + r.status);
+  r = await admin('/api/admin/employees/' + meId, { method: 'PATCH', body: { status: 'inactive' } });
+  check('admin cannot deactivate themselves', r.status === 400, 'got ' + r.status);
+  r = await admin('/api/auth/me');
+  check('admin still an active admin', r.data.user.role === 'admin' && r.data.user.status === 'active');
+
   console.log('\n[admin approvals]');
   r = await admin('/api/admin/leaves?status=pending');
   const pendingLeave = r.data.records?.[0];

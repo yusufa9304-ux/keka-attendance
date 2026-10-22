@@ -105,6 +105,12 @@ router.patch('/employees/:id', (req, res) => {
   if (role && !['admin', 'user'].includes(role)) return res.status(400).json({ error: 'role must be admin or user' });
   if (status && !['active', 'inactive'].includes(status)) return res.status(400).json({ error: 'status must be active or inactive' });
 
+  // An admin must not be able to lock themselves out of the console.
+  if (id === req.session.user.id) {
+    if (role && role !== 'admin') return res.status(400).json({ error: "You can't change your own role. Ask another admin." });
+    if (status && status !== 'active') return res.status(400).json({ error: "You can't deactivate your own account." });
+  }
+
   db.prepare(`
     UPDATE users SET
       name = COALESCE(?, name),
