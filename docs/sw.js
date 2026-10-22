@@ -2,13 +2,15 @@
    Cache-first for the app shell so the installed app opens instantly and
    still works offline (state lives in localStorage anyway). */
 
-const CACHE = 'vutto-attendance-v1';
+const CACHE = 'vutto-attendance-v2';
 const SHELL = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './manifest.webmanifest',
+  './img/logo.png',
+  './img/logo-white.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',

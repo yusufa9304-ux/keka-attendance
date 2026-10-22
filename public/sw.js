@@ -2,7 +2,7 @@
    Caches the static shell (pages, CSS, JS, icons) so the installed app opens
    fast and shows something useful offline. API calls are never cached. */
 
-const CACHE = 'vutto-attendance-app-v1';
+const CACHE = 'vutto-attendance-app-v2';
 const SHELL = [
   '/',
   '/dashboard.html',
@@ -13,6 +13,8 @@ const SHELL = [
   '/js/dashboard.js',
   '/js/admin.js',
   '/manifest.webmanifest',
+  '/img/logo.png',
+  '/img/logo-white.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-maskable-512.png',

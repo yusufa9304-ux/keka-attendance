@@ -50,7 +50,8 @@ h2 { font-size: 1.15rem; }
   background: var(--card); border-bottom: 1px solid var(--line);
   padding: 0 24px; height: 66px; position: sticky; top: 0; z-index: 20;
 }
-.nav .brand { display: flex; align-items: center; gap: 9px; }
+.nav .brand { display: flex; align-items: center; gap: 10px; }
+.nav .brand-logo { height: 28px; width: auto; display: block; }
 .nav .wordmark { font-weight: 800; letter-spacing: -.045em; font-size: 1.5rem; color: var(--ink); }
 .nav .wordmark .v { color: var(--brand); }
 .nav .logo {
@@ -169,15 +170,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .login-hero h1 { font-size: 2.6rem; color: #fff; max-width: 12ch; font-weight: 800; letter-spacing: -.03em; }
 .login-hero p { max-width: 40ch; opacity: .92; font-weight: 500; }
 .login-hero ul { margin-top: 22px; padding-left: 18px; line-height: 1.95; font-weight: 600; }
-.login-hero .hero-logo {
-  width: 48px; height: 48px; border-radius: 14px; background: #fff; color: var(--brand);
-  display: grid; place-items: center; font-weight: 800; font-size: 1.4rem; margin-bottom: 26px;
-}
+.login-hero .hero-logo-img { height: 44px; width: auto; display: block; margin-bottom: 26px; }
 .login-panel { display: grid; place-items: center; padding: 40px; }
 .login-box { width: 100%; max-width: 380px; }
-.login-box .wm { font-weight: 800; letter-spacing: -.045em; font-size: 1.9rem; margin-bottom: 12px; }
+.login-box .wm { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.login-box .wm .wm-logo { height: 36px; width: auto; display: block; }
 .login-box .wm .v { color: var(--brand); }
-.login-box .wm span.sub { color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: 0; margin-left: 8px; }
+.login-box .wm span.sub { color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: 0; border-left: 1px solid var(--line); padding-left: 10px; }
 @media (max-width: 780px) { .login-shell { grid-template-columns: 1fr; } .login-hero { display: none; } }
 
 .demo-creds { background: var(--brand-soft); border-radius: 12px; padding: 12px 14px; margin-top: 16px; font-size: .85rem; }
@@ -221,6 +220,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   body { padding-bottom: 74px; }
 
   .nav { padding: 0 14px; height: 58px; gap: 10px; }
+  .nav .brand-logo { height: 24px; }
   .nav .wordmark { font-size: 1.35rem; }
   .nav .brand-sub { display: none; }
   .nav .user .small { display: none; }
@@ -269,8 +269,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .login-panel { padding: 26px 18px 40px; }
   .login-shell { display: block; }
   .login-shell::before {
-    content: "Vutto"; display: block; background: var(--brand); color: #fff;
-    font-weight: 800; letter-spacing: -.045em; font-size: 1.3rem; padding: 16px 20px;
+    content: ""; display: block; height: 60px;
+    background: var(--brand) url("./img/logo-white.png") no-repeat 20px center / auto 24px;
   }
 }
 
