@@ -170,7 +170,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .login-hero h1 { font-size: 2.6rem; color: #fff; max-width: 12ch; font-weight: 800; letter-spacing: -.03em; }
 .login-hero p { max-width: 40ch; opacity: .92; font-weight: 500; }
 .login-hero ul { margin-top: 22px; padding-left: 18px; line-height: 1.95; font-weight: 600; }
-.login-hero .hero-logo-img { height: 44px; width: auto; display: block; margin-bottom: 26px; }
+/* align-self stops the flex column from stretching the logo sideways:
+   without it the wordmark is stretched to the full column width and
+   looks fat and squashed. Do not remove. */
+.login-hero .hero-logo-img { height: 44px; width: auto; align-self: flex-start; display: block; margin-bottom: 26px; }
 .login-panel { display: grid; place-items: center; padding: 40px; }
 .login-box { width: 100%; max-width: 380px; }
 .login-box .wm { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
