@@ -234,6 +234,110 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .vutto-foot b { color: var(--brand); }
 
 /* ============================================================
+   Motion — decorative only. Everything here is switched off at
+   the bottom for anyone whose device asks for reduced motion.
+   ============================================================ */
+@keyframes v-rise  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes v-fade  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v-pop   { 0% { opacity: 0; transform: scale(.86); } 60% { transform: scale(1.04); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes v-drift { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-16px, -20px) scale(1.07); } }
+@keyframes v-pulse { 0% { box-shadow: 0 0 0 0 rgba(228, 0, 43, .42); } 70% { box-shadow: 0 0 0 15px rgba(228, 0, 43, 0); } 100% { box-shadow: 0 0 0 0 rgba(228, 0, 43, 0); } }
+@keyframes v-sheen { from { transform: translateX(-130%) skewX(-18deg); } to { transform: translateX(330%) skewX(-18deg); } }
+@keyframes v-ring  { 0%, 100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.35); opacity: 0; } }
+
+/* --- cards and panels rise in, slightly staggered --- */
+.card { animation: v-rise .34s cubic-bezier(.22, .9, .3, 1) both; }
+.grid > *:nth-child(1) { animation-delay: .02s; }
+.grid > *:nth-child(2) { animation-delay: .06s; }
+.grid > *:nth-child(3) { animation-delay: .10s; }
+.grid > *:nth-child(4) { animation-delay: .14s; }
+
+/* --- table rows follow the card, a hair apart --- */
+tbody tr { animation: v-rise .26s cubic-bezier(.22, .9, .3, 1) both; }
+tbody tr:nth-child(1) { animation-delay: .04s; }
+tbody tr:nth-child(2) { animation-delay: .07s; }
+tbody tr:nth-child(3) { animation-delay: .10s; }
+tbody tr:nth-child(4) { animation-delay: .13s; }
+tbody tr:nth-child(5) { animation-delay: .16s; }
+tbody tr:nth-child(6) { animation-delay: .19s; }
+tbody tr:nth-child(7) { animation-delay: .22s; }
+tbody tr:nth-child(8) { animation-delay: .25s; }
+
+/* --- sign-in: hero copy steps in, the soft circle drifts --- */
+.login-hero > * { animation: v-rise .5s cubic-bezier(.22, .9, .3, 1) both; }
+.login-hero > *:nth-child(1) { animation-delay: .05s; }
+.login-hero > *:nth-child(2) { animation-delay: .13s; }
+.login-hero > *:nth-child(3) { animation-delay: .21s; }
+.login-hero > *:nth-child(4) { animation-delay: .29s; }
+.login-hero::after { animation: v-drift 16s ease-in-out infinite; }
+.login-box { animation: v-rise .5s cubic-bezier(.22, .9, .3, 1) .12s both; }
+
+/* --- buttons: lift on hover, press on click, a sheen across the red one --- */
+.btn {
+  transition: transform .16s cubic-bezier(.22, .9, .3, 1), box-shadow .16s ease,
+              background .16s ease, border-color .16s ease, color .16s ease;
+}
+.btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(20, 17, 11, .10); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.97); box-shadow: none; }
+.btn:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
+.btn.primary { position: relative; overflow: hidden; }
+.btn.primary::after {
+  /* left: 0 matters — without it the pseudo-element takes its static position
+     next to the label and the sheen shows up mid-button at rest. */
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 40%; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .38), transparent);
+  transform: translateX(-130%) skewX(-18deg);
+}
+.btn.primary:hover:not(:disabled)::after { animation: v-sheen .75s ease; }
+
+/* --- nav pills settle instead of snapping --- */
+.nav .links button { transition: background .18s ease, color .18s ease, transform .18s ease; }
+.nav .links button:active { transform: scale(.96); }
+.tabs button { transition: color .18s ease, border-color .18s ease; }
+
+/* --- "on the clock" badges breathe, so a live state reads as live --- */
+.badge.working { animation: v-pulse 2.4s ease-out infinite; }
+
+/* --- badges pop when a fresh one is rendered --- */
+.badge.pending { animation: v-pop .3s cubic-bezier(.2, 1.15, .35, 1) both; }
+
+/* --- the clock digits get a soft fade on each minute change --- */
+.clock .now { transition: opacity .2s ease; }
+
+/* --- photos grow a little under the cursor --- */
+.punch-photo { transition: transform .18s cubic-bezier(.22, .9, .3, 1), box-shadow .18s ease; }
+.punch-photo:hover { transform: scale(1.08); box-shadow: 0 6px 16px rgba(20, 17, 11, .18); }
+
+/* --- avatar --- */
+.avatar { transition: transform .18s ease; }
+.avatar:hover { transform: scale(1.06); }
+
+/* --- modal: backdrop fades, the panel springs in --- */
+.modal-bg.open { animation: v-fade .18s ease both; }
+.modal-bg.open .modal { animation: v-pop .28s cubic-bezier(.2, 1.15, .35, 1) both; }
+
+/* --- toast --- */
+.toast { transition: opacity .22s ease, transform .3s cubic-bezier(.2, 1.15, .35, 1); }
+
+/* --- the app panel swaps with a quick fade so it does not flash --- */
+#main { animation: v-fade .2s ease both; }
+
+/* ============================================================
+   Respect the system setting. Anyone who has asked their device
+   to reduce motion gets none of the above.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  /* animation: none rather than a tiny duration — collapsing the duration
+     leaves an animation with fill-mode: both parked on its first keyframe,
+     which hid the content entirely. With no animation the plain styles win. */
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
    Mobile / tablet — the tab strip becomes a bottom tab bar and
    wide tables scroll horizontally instead of squashing.
    ============================================================ */
