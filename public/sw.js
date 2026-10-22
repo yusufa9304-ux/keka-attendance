@@ -1,8 +1,8 @@
 /* Vutto Attendance — service worker for the full-stack app.
-   Caches the static shell (pages, CSS, JS, icons) so the installed app opens
-   fast and shows something useful offline. API calls are never cached. */
+   NETWORK-FIRST for the static shell so deploys land immediately; the cache is
+   only a fallback for offline. API calls are never cached. */
 
-const CACHE = 'vutto-attendance-app-v2';
+const CACHE = 'vutto-attendance-app-v3';
 const SHELL = [
   '/',
   '/dashboard.html',
@@ -42,12 +42,15 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api')) return;
 
   e.respondWith(
-    caches.match(req).then((hit) => {
-      const net = fetch(req).then((res) => {
-        if (res && res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
-        return res;
-      }).catch(() => hit || caches.match('/'));
-      return hit || net;
-    })
+    fetch(req).then((res) => {
+      if (res && res.ok && res.type === 'basic') {
+        caches.open(CACHE).then((c) => c.put(req, res.clone())).catch(() => {});
+      }
+      return res;
+    }).catch(() => caches.match(req).then((hit) => hit || caches.match('/')))
   );
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });

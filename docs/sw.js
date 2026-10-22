@@ -1,8 +1,9 @@
 /* Vutto Attendance — service worker.
-   Cache-first for the app shell so the installed app opens instantly and
-   still works offline (state lives in localStorage anyway). */
+   NETWORK-FIRST: always try the network so a new deploy shows up immediately,
+   and fall back to the cache only when offline. (Cache-first was hiding
+   updates — don't change this back.) */
 
-const CACHE = 'vutto-attendance-v2';
+const CACHE = 'vutto-attendance-v3';
 const SHELL = [
   './',
   './index.html',
@@ -34,24 +35,22 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  // Navigations: network first, fall back to the cached shell when offline.
-  if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req).catch(() => caches.match('./index.html'))
-    );
-    return;
-  }
-
-  // Everything else: cache first, refresh in the background.
+  // Network first; keep a copy for offline; fall back to cache when the
+  // network is unavailable.
   e.respondWith(
-    caches.match(req).then((hit) => {
-      const net = fetch(req).then((res) => {
-        if (res && res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
-        return res;
-      }).catch(() => hit);
-      return hit || net;
-    })
+    fetch(req).then((res) => {
+      if (res && res.ok && res.type === 'basic') {
+        caches.open(CACHE).then((c) => c.put(req, res.clone())).catch(() => {});
+      }
+      return res;
+    }).catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
   );
+});
+
+// Allow the page to trigger an immediate update check.
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });

@@ -59,9 +59,15 @@ async function logout() {
   location.href = '/';
 }
 
-/* Installable app: register the service worker (no-op where unsupported). */
+/* Installable app: register the service worker (no-op where unsupported).
+   Versioned URL + reload on change so a new deploy is picked up immediately. */
 if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloading) { reloading = true; location.reload(); }
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js?v=3').catch(() => {});
   });
 }
