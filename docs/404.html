@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vutto Attendance</title>
+<link rel="icon" href="./icons/favicon-32.png" sizes="32x32" />
+<script>
+  // Single-page app: any unknown path (e.g. /admin or /dashboard) opens the app.
+  // Guarded so a wrong guess can never loop.
+  try {
+    if (!sessionStorage.getItem('vutto404')) {
+      sessionStorage.setItem('vutto404', '1');
+      var parts = location.pathname.split('/').filter(Boolean);
+      var base = '/' + (parts[0] ? parts[0] + '/' : '');
+      location.replace(base + (location.search || ''));
+    }
+  } catch (e) { /* show the link below instead */ }
+</script>
+</head>
+<body style="font-family:system-ui;padding:24px">
+  <p>Opening Vutto Attendance… <a href="./">Continue</a></p>
+</body>
+</html>

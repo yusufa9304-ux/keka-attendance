@@ -13,7 +13,7 @@
 <link rel="manifest" href="./manifest.webmanifest" />
 <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" />
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-<link rel="stylesheet" href="./style.css?v=4" />
+<link rel="stylesheet" href="./style.css?v=5" />
 </head>
 <body>
 <!-- ============================ LOGIN ============================ -->
@@ -52,7 +52,8 @@
           <button class="btn sm ghost" id="fill-admin" type="button">Use admin</button>
           <button class="btn sm ghost" id="fill-user" type="button">Use employee</button>
         </div>
-        <p class="small muted" style="margin-top:14px">Demo build — data lives in your browser only.</p>
+        <p class="small muted" style="margin-top:14px">Demo build v5 — data lives in your browser only.</p>
+        <button class="btn sm ghost" id="reset-app" type="button" style="margin-top:10px">App not loading? Reset it</button>
       </div>
     </div>
   </div>
@@ -84,8 +85,8 @@
 </div>
 
 <div class="modal-bg" id="modal"><div class="modal" id="modal-body"></div></div>
-<script src="./capture.js?v=4"></script>
-<script src="./app.js?v=4"></script>
+<script src="./capture.js?v=5"></script>
+<script src="./app.js?v=5"></script>
 <script>
   // Installable app: register the service worker.
   // The worker URL is versioned so an updated worker is always fetched, and we
@@ -97,9 +98,39 @@
       if (hadController && !reloading) { reloading = true; location.reload(); }
     });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js?v=4').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=5').catch(() => {});
     });
   }
+  // If the app throws, show it instead of a blank screen.
+  function showFatal(msg) {
+    let b = document.getElementById('fatal');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'fatal';
+      b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:999;background:#c62828;color:#fff;padding:12px 16px;border-radius:12px;font:600 13px/1.4 system-ui;box-shadow:0 10px 30px rgba(0,0,0,.3)';
+      document.body.appendChild(b);
+    }
+    b.textContent = 'Something went wrong: ' + msg + ' — tap "Reset it" below the sign-in form.';
+  }
+  window.addEventListener('error', (e) => showFatal(e.message || 'script error'));
+  window.addEventListener('unhandledrejection', (e) => showFatal((e.reason && e.reason.message) || 'unhandled error'));
+
+  // One-click recovery: drop the service worker + caches + demo data, then reload.
+  document.getElementById('reset-app').onclick = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      localStorage.clear();
+    } catch (e) { /* ignore */ }
+    location.replace(location.pathname + '?fresh=' + Date.now());
+  };
+
   // Show an "Install app" button when the browser offers it.
   let deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => {
