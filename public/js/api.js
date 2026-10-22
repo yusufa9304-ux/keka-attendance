@@ -58,3 +58,10 @@ async function logout() {
   await api('/auth/logout', { method: 'POST' });
   location.href = '/';
 }
+
+/* Installable app: register the service worker (no-op where unsupported). */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}

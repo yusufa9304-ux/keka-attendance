@@ -89,6 +89,19 @@ It needs no backend, so it is handy for a quick look or a share link. The full-s
 
 ---
 
+## Mobile & desktop (installable)
+
+The app is a **responsive PWA** — one codebase that works on phones, tablets and desktops, and can be installed like a native app.
+
+- **Desktop:** the usual top navigation, multi-column layout.
+- **Phone / tablet:** the tab strip becomes a **bottom tab bar**, cards stack into a single column, tap targets are ≥ 44px, and wide tables scroll horizontally instead of squashing.
+- **Install:** open the site in Chrome/Edge/Android and use the browser's *Install app* option (an **Install app** button also appears in the footer when the browser offers it). On iOS Safari, use *Share → Add to Home Screen*. It then opens full-screen from a home-screen icon, with a Vutto-yellow theme colour and app icon.
+- **Offline shell:** a service worker caches the app shell, so the installed app opens instantly and still shows the interface without a network (API calls always go to the server and are never cached).
+
+PWA pieces: `manifest.webmanifest`, `sw.js`, and `icons/` (192/512 + maskable + Apple touch) — present in both `docs/` (static build) and `public/` (full-stack app).
+
+---
+
 ## Deploying the full-stack app
 
 A `Dockerfile` is included. It listens on port `7860` and stores SQLite at `/tmp/attendance.db`, seeding demo data automatically on first boot.

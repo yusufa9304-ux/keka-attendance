@@ -4,6 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Vutto Attendance</title>
+<meta name="description" content="Vutto's attendance desk — punch in and out, apply for leave, and track your month. For employees and admins." />
+<meta name="theme-color" content="#FFD400" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Vutto HR" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" href="./icons/favicon-32.png" sizes="32x32" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
 <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -70,10 +79,40 @@
     </div>
   </nav>
   <div class="wrap" id="main"></div>
-  <div class="vutto-foot">Vutto Attendance · demo build</div>
+  <div class="vutto-foot">Vutto Attendance · demo build
+    <button id="install-btn" class="btn sm primary hidden" style="margin-left:8px" onclick="vuttoInstall()">Install app</button>
+  </div>
 </div>
 
 <div class="modal-bg" id="modal"><div class="modal" id="modal-body"></div></div>
 <script src="./app.js"></script>
+<script>
+  // Installable app: register the service worker.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+  // Show an "Install app" button when the browser offers it.
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const b = document.getElementById('install-btn');
+    if (b) b.classList.remove('hidden');
+  });
+  window.addEventListener('appinstalled', () => {
+    const b = document.getElementById('install-btn');
+    if (b) b.classList.add('hidden');
+  });
+  window.vuttoInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    const b = document.getElementById('install-btn');
+    if (b) b.classList.add('hidden');
+  };
+</script>
 </body>
 </html>
