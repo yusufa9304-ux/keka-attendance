@@ -14,6 +14,26 @@
 <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" />
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
 <link rel="stylesheet" href="./style.css?v=5" />
+<script>
+  /* Runs BEFORE the app, so recovery works even if an old app.js is cached.
+     If the stored data has no active admin (someone demoted the only admin),
+     restore the demo admin so the admin console is reachable again. */
+  try {
+    var KEY = 'vutto_attendance_v1';
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var st = JSON.parse(raw);
+      var users = st.users || [];
+      var hasAdmin = users.some(function (u) { return u.role === 'admin' && u.status === 'active'; });
+      if (!hasAdmin && users.length) {
+        var a = users.filter(function (u) { return String(u.email).toLowerCase() === 'admin@vutto.demo'; })[0];
+        if (a) { a.role = 'admin'; a.status = 'active'; }
+        else users.push({ id: (st.seq && st.seq.u) || 99, name: 'Yusuf Admin', email: 'admin@vutto.demo', password: 'Admin@123', role: 'admin', department: 'HR', employee_code: 'VUT-0001', status: 'active', leave_balance: 18 });
+        localStorage.setItem(KEY, JSON.stringify(st));
+      }
+    }
+  } catch (e) { /* never block the page */ }
+</script>
 </head>
 <body>
 <!-- ============================ LOGIN ============================ -->
