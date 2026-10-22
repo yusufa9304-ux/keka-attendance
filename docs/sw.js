@@ -3,7 +3,7 @@
    and fall back to the cache only when offline. (Cache-first was hiding
    updates — don't change this back.) */
 
-const CACHE = 'vutto-attendance-v6';
+const CACHE = 'vutto-attendance-v7';
 const SHELL = [
   './',
   './index.html',
