@@ -13,8 +13,8 @@ import { db, todayStr, addDays, isWeekend } from './db.js';
 
 export function runSeed({ reset = false, quiet = false } = {}) {
   if (reset) {
-    db.exec('DELETE FROM regularizations; DELETE FROM leaves; DELETE FROM attendance; DELETE FROM users;');
-    db.exec("DELETE FROM sqlite_sequence WHERE name IN ('users','attendance','leaves','regularizations');");
+    db.exec('DELETE FROM location_pings; DELETE FROM regularizations; DELETE FROM leaves; DELETE FROM attendance; DELETE FROM users;');
+    db.exec("DELETE FROM sqlite_sequence WHERE name IN ('users','attendance','leaves','regularizations','location_pings');");
   }
 
   const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
@@ -46,9 +46,19 @@ export function runSeed({ reset = false, quiet = false } = {}) {
     }
 
     // ~14 days of attendance history for each employee (skip weekends).
+    // Office / site coordinates so the location features have demo data.
+    const SITES = [
+      { lat: 28.6139, lng: 77.2090, address: 'Connaught Place, New Delhi' },
+      { lat: 28.5355, lng: 77.3910, address: 'Sector 62, Noida' },
+      { lat: 28.4595, lng: 77.0266, address: 'Sector 29, Gurugram' },
+      { lat: 28.6692, lng: 77.4538, address: 'Vaishali, Ghaziabad' },
+      { lat: 28.5921, lng: 77.0460, address: 'Dwarka, New Delhi' },
+    ];
     const insertAtt = db.prepare(`
-      INSERT OR IGNORE INTO attendance (user_id, date, clock_in, clock_out, status, worked_minutes, note)
-      VALUES (@user_id, @date, @clock_in, @clock_out, @status, @worked_minutes, @note)
+      INSERT OR IGNORE INTO attendance
+        (user_id, date, clock_in, clock_out, status, worked_minutes, note, in_lat, in_lng, in_address)
+      VALUES
+        (@user_id, @date, @clock_in, @clock_out, @status, @worked_minutes, @note, @in_lat, @in_lng, @in_address)
     `);
     const employees = seedUsers.filter((u) => u.role === 'user');
     const today = todayStr();
@@ -60,7 +70,7 @@ export function runSeed({ reset = false, quiet = false } = {}) {
         const absent = back === 6 && i === 2;
         const half = back === 3 && i === 1;
         if (absent) {
-          insertAtt.run({ user_id: uid, date, clock_in: null, clock_out: null, status: 'absent', worked_minutes: 0, note: 'No show' });
+          insertAtt.run({ user_id: uid, date, clock_in: null, clock_out: null, status: 'absent', worked_minutes: 0, note: 'No show', in_lat: null, in_lng: null, in_address: null });
           continue;
         }
         const isToday = back === 0;
@@ -72,6 +82,7 @@ export function runSeed({ reset = false, quiet = false } = {}) {
         const outM = half ? 30 : 15 + ((i * 5) % 30);
         const clockOut = isToday ? null : `${date}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`;
         const worked = isToday ? 0 : (outH * 60 + outM) - (inH * 60 + inM);
+        const site = SITES[i % SITES.length];
         insertAtt.run({
           user_id: uid,
           date,
@@ -80,7 +91,21 @@ export function runSeed({ reset = false, quiet = false } = {}) {
           status: isToday ? 'present' : half ? 'half_day' : 'present',
           worked_minutes: worked,
           note: null,
+          in_lat: site.lat,
+          in_lng: site.lng,
+          in_address: site.address,
         });
+        // A short location trail for today's punches (every ~10 min).
+        if (isToday) {
+          const ping = db.prepare(`
+            INSERT INTO location_pings (user_id, date, lat, lng, accuracy, address, captured_at, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'auto')
+          `);
+          for (let k = 1; k <= 3; k++) {
+            const t = `${date}T${String(10 + k).padStart(2, '0')}:${String((i * 7 + k * 3) % 60).padStart(2, '0')}:00`;
+            ping.run(uid, date, site.lat + k * 0.0012, site.lng + k * 0.0009, 18 + k, site.address, t);
+          }
+        }
       }
     }
 

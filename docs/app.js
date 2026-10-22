@@ -22,6 +22,14 @@ function seed() {
   mk('Rahul Verma', 'rahul@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0004', 12);
   mk('Sneha Iyer', 'sneha@vutto.demo', 'User@123', 'user', 'Engineering', 'VUT-0005', 18);
 
+  const SITES = [
+    { lat: 28.6139, lng: 77.2090, address: 'Connaught Place, New Delhi' },
+    { lat: 28.5355, lng: 77.3910, address: 'Sector 62, Noida' },
+    { lat: 28.4595, lng: 77.0266, address: 'Sector 29, Gurugram' },
+    { lat: 28.6692, lng: 77.4538, address: 'Vaishali, Ghaziabad' },
+  ];
+  const location_pings = [];
+  let pid = 1;
   const attendance = [];
   let aid = 1;
   const today = todayStr();
@@ -40,7 +48,24 @@ function seed() {
       const outH = half ? 13 : 18, outM = half ? 30 : 15 + ((i * 5) % 30);
       const cout = isToday ? null : `${date}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`;
       const worked = isToday ? 0 : (outH * 60 + outM) - (inH * 60 + inM);
-      attendance.push({ id: aid++, user_id: e.id, date, clock_in: cin, clock_out: cout, status: isToday ? 'present' : (half ? 'half_day' : 'present'), worked_minutes: worked, note: null });
+      const site = SITES[i % SITES.length];
+      attendance.push({
+        id: aid++, user_id: e.id, date, clock_in: cin, clock_out: cout,
+        status: isToday ? 'present' : (half ? 'half_day' : 'present'), worked_minutes: worked, note: null,
+        in_lat: site.lat, in_lng: site.lng, in_address: site.address, in_photo: null,
+        out_lat: null, out_lng: null, out_address: null, out_photo: null,
+      });
+      if (isToday) {
+        for (let k = 1; k <= 3; k++) {
+          location_pings.push({
+            id: pid++, user_id: e.id, date,
+            lat: site.lat + k * 0.0012, lng: site.lng + k * 0.0009,
+            accuracy: 18 + k, address: site.address,
+            captured_at: `${date}T${String(10 + k).padStart(2, '0')}:${String((i * 7 + k * 3) % 60).padStart(2, '0')}:00`,
+            source: 'auto',
+          });
+        }
+      }
     });
   }
 
@@ -52,7 +77,7 @@ function seed() {
     { id: 1, user_id: 4, date: addDays(today, -2), requested_clock_in: `${addDays(today, -2)}T09:35:00`, requested_clock_out: `${addDays(today, -2)}T18:40:00`, reason: 'Forgot to clock out, was on client call', status: 'pending', reviewed_at: null },
   ];
 
-  return { users, attendance, leaves, regularizations, session: null, seq: { u: 6, a: aid, l: 3, r: 2 } };
+  return { users, attendance, leaves, regularizations, location_pings, session: null, seq: { u: 6, a: aid, l: 3, r: 2, p: pid } };
 }
 
 function load() {
@@ -61,6 +86,9 @@ function load() {
 }
 function persist(st = DB) { try { localStorage.setItem(LS_KEY, JSON.stringify(st)); } catch {} }
 let DB = load();
+DB.location_pings ||= [];
+DB.seq = DB.seq || {};
+DB.seq.p ||= (DB.location_pings.length + 1);
 
 const ui = {
   tab: null, atab: null,
@@ -91,24 +119,83 @@ function toast(msg, isErr = false) {
 const todayRow = (uid) => DB.attendance.find((a) => a.user_id === uid && a.date === todayStr());
 const workedHours = (r) => (r && r.worked_minutes ? +(r.worked_minutes / 60).toFixed(2) : 0);
 
-function clockIn() {
-  const u = me(); const date = todayStr();
-  let r = todayRow(u.id);
-  if (r && r.clock_in) return toast('You have already clocked in today', true);
-  if (!r) DB.attendance.push({ id: DB.seq.a++, user_id: u.id, date, clock_in: new Date().toISOString(), clock_out: null, status: 'present', worked_minutes: 0, note: null });
-  else { r.clock_in = new Date().toISOString(); r.status = 'present'; r.note = null; }
-  persist(); toast('Clocked in. Have a good day!'); render();
+function addPing(u, date, pos, source = 'auto', at = new Date().toISOString()) {
+  DB.location_pings.push({
+    id: DB.seq.p++, user_id: u.id, date,
+    lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy ?? null,
+    address: pos.address || null, captured_at: at, source,
+  });
 }
-function clockOut() {
-  const u = me(); const r = todayRow(u.id);
-  if (!r || !r.clock_in) return toast('You need to clock in first', true);
-  if (r.clock_out) return toast('You have already clocked out today', true);
-  const now = new Date();
-  r.clock_out = now.toISOString();
-  r.worked_minutes = Math.max(0, Math.round((now - new Date(r.clock_in)) / 60000));
-  r.status = r.worked_minutes < WORK.halfDay ? 'half_day' : 'present';
-  persist(); toast('Clocked out. See you tomorrow!'); render();
+
+async function doPunch(kind) {
+  const u = me();
+  try {
+    const proof = await CAPTURE.punchProof((msg) => toast(msg));
+    const now = new Date().toISOString();
+    const date = todayStr();
+    if (kind === 'in') {
+      let r = todayRow(u.id);
+      if (r && r.clock_in) { toast('You have already clocked in today', true); return render(); }
+      if (!r) {
+        DB.attendance.push({
+          id: DB.seq.a++, user_id: u.id, date, clock_in: now, clock_out: null,
+          status: 'present', worked_minutes: 0, note: null,
+          in_lat: proof.lat, in_lng: proof.lng, in_address: proof.address, in_photo: proof.photo,
+          out_lat: null, out_lng: null, out_address: null, out_photo: null,
+        });
+      } else {
+        r.clock_in = now; r.status = 'present'; r.note = null;
+        r.in_lat = proof.lat; r.in_lng = proof.lng; r.in_address = proof.address; r.in_photo = proof.photo;
+      }
+      addPing(u, date, proof, 'punch', now);
+      toast('Clocked in — photo + location saved');
+    } else {
+      const r = todayRow(u.id);
+      if (!r || !r.clock_in) { toast('You need to clock in first', true); return render(); }
+      if (r.clock_out) { toast('You have already clocked out today', true); return render(); }
+      r.clock_out = now;
+      r.worked_minutes = Math.max(0, Math.round((new Date(now) - new Date(r.clock_in)) / 60000));
+      r.status = r.worked_minutes < WORK.halfDay ? 'half_day' : 'present';
+      r.out_lat = proof.lat; r.out_lng = proof.lng; r.out_address = proof.address; r.out_photo = proof.photo;
+      addPing(u, date, proof, 'punch', now);
+      toast('Clocked out — photo + location saved');
+    }
+    persist(); render();
+  } catch (err) {
+    toast(err.message, true);
+    render();
+  }
 }
+
+/* ---- periodic location tracking (every 10 min while on the clock) ---- */
+let tracker = null;
+const PING_MIN = 10;
+function startTracking() {
+  if (tracker) return;
+  tracker = CAPTURE.startTracking(PING_MIN, async (pos) => {
+    const u = me(); if (!u) return;
+    addPing(u, todayStr(), pos, 'auto');
+    persist();
+  });
+}
+function stopTracking() { if (tracker) { tracker.stop(); tracker = null; } }
+
+const mapsUrl = (lat, lng) => (lat != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);
+const fmtCoords = (lat, lng) => `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+
+window.viewPhoto = (src) => {
+  let m = document.getElementById('photo-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'photo-modal'; m.className = 'modal-bg';
+    m.innerHTML = '<div class="modal photo-viewer"><h2>Punch photo</h2><img id="photo-img" alt="Punch photo" /><div class="foot"><button class="btn ghost" id="photo-close">Close</button></div></div>';
+    document.body.appendChild(m);
+    m.onclick = (e) => { if (e.target === m) m.classList.remove('open'); };
+    m.querySelector('#photo-close').onclick = () => m.classList.remove('open');
+  }
+  m.querySelector('#photo-img').src = src;
+  m.classList.add('open');
+};
 
 function usedLeave(uid) {
   const y = String(new Date().getFullYear());
@@ -176,10 +263,23 @@ function reviewReg(id, action) {
   }
   persist(); toast(`Regularization ${r.status === 'approved' ? 'approved' : 'rejected'}`); render();
 }
+function nextEmployeeCode() {
+  let max = 0;
+  for (const u of DB.users) {
+    const n = parseInt(String(u.employee_code || '').replace(/\D+/g, ''), 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return `VUT-${String(max + 1).padStart(4, '0')}`;
+}
+
 function addEmployee(body) {
   if (!body.name || !body.email || !body.password) return toast('Name, email and password are required', true);
   if (DB.users.some((u) => u.email.toLowerCase() === body.email.toLowerCase())) return toast('An account with this email already exists', true);
-  DB.users.push({ id: DB.seq.u++, name: body.name, email: body.email, password: body.password, role: body.role || 'user', department: body.department || null, employee_code: body.employee_code || null, status: 'active', leave_balance: body.leave_balance ?? 18 });
+  DB.users.push({
+    id: DB.seq.u++, name: body.name, email: body.email, password: body.password,
+    role: body.role || 'user', department: body.department || null,
+    employee_code: nextEmployeeCode(), status: 'active', leave_balance: body.leave_balance ?? 18,
+  });
   persist(); toast('Employee created'); closeModal(); render();
 }
 function patchEmployee(id, patch) {
@@ -226,6 +326,19 @@ function renderUser() {
 
   const t = todayRow(u.id);
   const worked = t && t.worked_minutes ? fmtHours(t.worked_minutes / 60) : '—';
+  const pingsToday = DB.location_pings.filter((p) => p.user_id === u.id && p.date === todayStr()).length;
+  const onClock = !!(t && t.clock_in && !t.clock_out);
+  const punchLoc = (r, kind) => {
+    const lat = kind === 'in' ? r.in_lat : r.out_lat;
+    if (lat == null) return '';
+    const lng = kind === 'in' ? r.in_lng : r.out_lng;
+    const addr = (kind === 'in' ? r.in_address : r.out_address) || fmtCoords(lat, lng);
+    const photo = kind === 'in' ? r.in_photo : r.out_photo;
+    return `<div class="photo-row" style="justify-content:center;margin-top:10px">
+      ${photo ? `<img class="punch-photo" src="${photo}" alt="${kind} photo" onclick="viewPhoto(this.src)" />` : ''}
+      <span class="loc"><span class="pin">📍</span> <a href="${mapsUrl(lat, lng)}" target="_blank" rel="noopener">${esc(addr)}</a></span>
+    </div>`;
+  };
   const clockPanel = `
     <div class="card clock">
       <div class="now" id="live-clock">--:--:--</div>
@@ -240,7 +353,13 @@ function renderUser() {
         <div><div class="k">Worked</div><div class="v">${worked}</div></div>
         <div><div class="k">Status</div><div class="v">${t ? `<span class="badge ${t.status}">${label(t.status)}</span>` : '<span class="badge not_in">Not marked</span>'}</div></div>
       </div>
+      ${t ? punchLoc(t, 'in') : ''}
+      ${t && t.clock_out ? punchLoc(t, 'out') : ''}
+      <div class="track-note">${onClock
+        ? `📍 On the clock — location updates every ${PING_MIN} min (${pingsToday} update${pingsToday === 1 ? '' : 's'} so far today).`
+        : `📍 Location + a selfie are required for every punch. ${pingsToday ? pingsToday + ' location update(s) recorded today.' : ''}`}</div>
     </div>`;
+  if (onClock) startTracking(); else stopTracking();
 
   const statsPanel = `
     <div class="card">
@@ -267,14 +386,15 @@ function renderUser() {
         <label class="small muted">To</label><input type="date" id="hist-to" value="${ui.histTo}" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px" />
         <button class="btn sm" id="hist-go">Apply</button>
       </div></div>
-      <div class="card"><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Status</th><th>Note</th></tr></thead>
+      <div class="card"><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>Status</th></tr></thead>
       <tbody>${recs.length ? recs.map((r) => `<tr>
         <td>${fmtDate(r.date)}</td>
         <td>${fmtTime(r.clock_in)}${r.clock_in && r.clock_in.slice(11, 16) > WORK.start ? ' <span class="badge half_day" style="font-size:.7rem">late</span>' : ''}</td>
         <td>${fmtTime(r.clock_out)}</td>
         <td class="num">${r.worked_minutes ? fmtHours(r.worked_minutes / 60) : '—'}</td>
-        <td><span class="badge ${r.status}">${label(r.status)}</span></td>
-        <td class="muted small">${esc(r.note || '')}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">No records in this range.</td></tr>'}</tbody></table></div>`;
+        <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>
+        <td class="small">${r.in_lat != null ? `<a href="${mapsUrl(r.in_lat, r.in_lng)}" target="_blank" rel="noopener"><span class="pin">📍</span> ${esc(r.in_address || fmtCoords(r.in_lat, r.in_lng))}</a>` : '<span class="muted">—</span>'}</td>
+        <td><span class="badge ${r.status}">${label(r.status)}</span></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No records in this range.</td></tr>'}</tbody></table></div>`;
   } else if (ui.tab === 'leave') {
     const mine = DB.leaves.filter((l) => l.user_id === u.id).sort((a, b) => b.id - a.id);
     panel = `<div class="page-head"><h1>Leaves</h1></div>
@@ -326,10 +446,10 @@ function renderUser() {
 
 function renderAdmin() {
   const u = me();
-  if (!ui.tab || !['team', 'approvals', 'employees', 'reports'].includes(ui.tab)) ui.tab = 'team';
+  if (!ui.tab || !['team', 'locations', 'approvals', 'employees', 'reports'].includes(ui.tab)) ui.tab = 'team';
   if (!ui.atab) ui.atab = 'leaves';
   const pending = DB.leaves.filter((l) => l.status === 'pending').length + DB.regularizations.filter((r) => r.status === 'pending').length;
-  const tabs = [['team', 'Team Today'], ['approvals', `Approvals ${pending ? `<span class="badge pending">${pending}</span>` : ''}`], ['employees', 'Employees'], ['reports', 'Reports']];
+  const tabs = [['team', 'Team Today'], ['locations', 'Locations'], ['approvals', `Approvals ${pending ? `<span class="badge pending">${pending}</span>` : ''}`], ['employees', 'Employees'], ['reports', 'Reports']];
   document.getElementById('nav-links').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}</button>`).join('');
 
   const date = todayStr();
@@ -360,14 +480,41 @@ function renderAdmin() {
     </div>`;
 
   let panel = '';
+  const locCell = (lat, lng, address) => (lat != null
+    ? `<a href="${mapsUrl(lat, lng)}" target="_blank" rel="noopener" class="small"><span class="pin">📍</span> ${esc(address || fmtCoords(lat, lng))}</a>`
+    : '<span class="muted small">—</span>');
+  const photoCell = (src) => (src
+    ? `<img class="punch-photo" src="${src}" alt="punch photo" onclick="viewPhoto(this.src)" />`
+    : '<span class="muted small">—</span>');
+
   if (ui.tab === 'team') {
     panel = `<div class="card"><h2>Team status — today</h2>
-      <table><thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>State</th></tr></thead>
+      <table><thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>State</th></tr></thead>
       <tbody>${team.length ? team.map(({ e, a, state }) => `<tr>
         <td><b>${esc(e.name)}</b><div class="muted small">${esc(e.employee_code || '')}</div></td>
         <td>${esc(e.department || '—')}</td><td>${fmtTime(a && a.clock_in)}</td><td>${fmtTime(a && a.clock_out)}</td>
         <td class="num">${a && a.worked_minutes ? fmtHours(a.worked_minutes / 60) : '—'}</td>
-        <td><span class="badge ${state}">${label(state)}</span></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No employees yet.</td></tr>'}</tbody></table></div>`;
+        <td>${photoCell(a && a.in_photo)}</td>
+        <td>${locCell(a && a.in_lat, a && a.in_lng, a && a.in_address)}</td>
+        <td><span class="badge ${state}">${label(state)}</span></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No employees yet.</td></tr>'}</tbody></table></div>`;
+  } else if (ui.tab === 'locations') {
+    const rows = team.map(({ e, a }) => {
+      const list = DB.location_pings.filter((p) => p.user_id === e.id && p.date === date)
+        .sort((x, y) => String(y.captured_at).localeCompare(String(x.captured_at)));
+      const latest = list[0] || null;
+      return { e, a, latest, count: list.length, onClock: !!(a && a.clock_in && !a.clock_out) };
+    });
+    panel = `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+        <h2>Live locations</h2><span class="ping-count">${date} · updates every ${PING_MIN} min</span></div>
+      <table><thead><tr><th>Employee</th><th>On clock</th><th>Check-in location</th><th>Last seen</th><th>Latest location</th><th class="num">Updates</th></tr></thead>
+      <tbody>${rows.map(({ e, a, latest, count, onClock }) => `<tr>
+        <td><b>${esc(e.name)}</b><div class="muted small">${esc(e.employee_code || '')}</div></td>
+        <td>${onClock ? '<span class="badge working">On clock</span>' : (a && a.clock_out ? '<span class="badge done">Clocked out</span>' : '<span class="badge not_in">Not in</span>')}</td>
+        <td>${locCell(a && a.in_lat, a && a.in_lng, a && a.in_address)}</td>
+        <td class="small">${latest ? fmtTime(latest.captured_at) : '<span class="muted">—</span>'}</td>
+        <td>${latest ? locCell(latest.lat, latest.lng, latest.address) : '<span class="muted small">—</span>'}</td>
+        <td class="num">${count}</td></tr>`).join('')}</tbody></table></div>`;
   } else if (ui.tab === 'approvals') {
     const leaves = DB.leaves.slice().sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
     const regs = DB.regularizations.slice().sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
@@ -440,8 +587,8 @@ function startClock() {
 }
 
 function bindUser() {
-  const b = document.getElementById('btn-in'); if (b) b.onclick = clockIn;
-  const o = document.getElementById('btn-out'); if (o) o.onclick = clockOut;
+  const b = document.getElementById('btn-in'); if (b) b.onclick = () => doPunch('in');
+  const o = document.getElementById('btn-out'); if (o) o.onclick = () => doPunch('out');
   const hg = document.getElementById('hist-go');
   if (hg) hg.onclick = () => { ui.histFrom = document.getElementById('hist-from').value; ui.histTo = document.getElementById('hist-to').value; render(); };
   const ls = document.getElementById('lv-submit');
@@ -466,20 +613,19 @@ function closeModal() { document.getElementById('modal').classList.remove('open'
 
 function openAdd() {
   openModal(`<h2>Add employee</h2>
+    <p class="small muted">The employee ID is generated automatically (${nextEmployeeCode()}).</p>
     <div class="field"><label>Full name</label><input id="e-name" placeholder="e.g. Meera Joshi" /></div>
     <div class="field"><label>Work email</label><input id="e-email" type="email" placeholder="name@vutto.in" /></div>
     <div class="row2"><div class="field"><label>Password</label><input id="e-pass" placeholder="Temp password" /></div>
-    <div class="field"><label>Employee code</label><input id="e-code" placeholder="VUT-0006" /></div></div>
-    <div class="row2"><div class="field"><label>Department</label><input id="e-dept" placeholder="Engineering" /></div>
-    <div class="field"><label>Role</label><select id="e-role"><option value="user">User</option><option value="admin">Admin</option></select></div></div>
-    <div class="field"><label>Leave balance (days)</label><input id="e-bal" type="number" value="18" /></div>
+    <div class="field"><label>Department</label><input id="e-dept" placeholder="Engineering" /></div></div>
+    <div class="row2"><div class="field"><label>Role</label><select id="e-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
+    <div class="field"><label>Leave balance (days)</label><input id="e-bal" type="number" value="18" /></div></div>
     <div class="foot"><button class="btn ghost" id="e-cancel">Cancel</button><button class="btn primary" id="e-save">Create</button></div>`);
   document.getElementById('e-cancel').onclick = closeModal;
   document.getElementById('e-save').onclick = () => addEmployee({
     name: document.getElementById('e-name').value.trim(),
     email: document.getElementById('e-email').value.trim(),
     password: document.getElementById('e-pass').value,
-    employee_code: document.getElementById('e-code').value.trim() || null,
     department: document.getElementById('e-dept').value.trim() || null,
     role: document.getElementById('e-role').value,
     leave_balance: Number(document.getElementById('e-bal').value) || 18,
@@ -494,7 +640,7 @@ document.getElementById('nav-links').addEventListener('click', (e) => {
 document.getElementById('main').addEventListener('click', (e) => {
   const t = e.target.closest('button[data-atab]'); if (t) { ui.atab = t.dataset.atab; render(); }
 });
-document.getElementById('logout').onclick = () => { DB.session = null; persist(); ui.tab = null; render(); };
+document.getElementById('logout').onclick = () => { stopTracking(); DB.session = null; persist(); ui.tab = null; render(); };
 
 document.getElementById('login-form').onsubmit = (e) => {
   e.preventDefault();

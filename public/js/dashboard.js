@@ -1,4 +1,6 @@
 let ME = null;
+let tracker = null;
+let PING_MIN = 10;
 
 (async function init() {
   ME = await currentUser();
@@ -39,20 +41,54 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
+/* ---- photo viewer ---- */
+window.viewPhoto = (src) => {
+  let m = document.getElementById('photo-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'photo-modal';
+    m.className = 'modal-bg';
+    m.innerHTML = '<div class="modal photo-viewer"><h2>Punch photo</h2><img id="photo-img" alt="Punch photo" /><div class="foot"><button class="btn ghost" id="photo-close">Close</button></div></div>';
+    document.body.appendChild(m);
+    m.onclick = (e) => { if (e.target === m) m.classList.remove('open'); };
+    m.querySelector('#photo-close').onclick = () => m.classList.remove('open');
+  }
+  m.querySelector('#photo-img').src = src;
+  m.classList.add('open');
+};
+
+const locLine = (a, kind) => {
+  const lat = kind === 'in' ? a.in_lat : a.out_lat;
+  if (lat == null) return '';
+  const url = kind === 'in' ? a.in_map_url : a.out_map_url;
+  const addr = (kind === 'in' ? a.in_address : a.out_address) || `${Number(lat).toFixed(5)}, ${Number(kind === 'in' ? a.in_lng : a.out_lng).toFixed(5)}`;
+  const photo = kind === 'in' ? a.in_photo : a.out_photo;
+  return `<div class="photo-row" style="justify-content:center;margin-top:10px">
+      ${photo ? `<img class="punch-photo" src="${photo}" alt="${kind} photo" onclick="viewPhoto(this.src)" />` : ''}
+      <span class="loc"><span class="pin">📍</span> <a href="${url}" target="_blank" rel="noopener">${esc(addr)}</a></span>
+    </div>`;
+};
+
 /* ---- today ---- */
 async function loadToday() {
-  const { attendance } = await api('/attendance/today');
+  const { attendance, pings, ping_interval_minutes } = await api('/attendance/today');
+  PING_MIN = ping_interval_minutes || 10;
   const inEl = document.getElementById('today-in');
   const outEl = document.getElementById('today-out');
   const workedEl = document.getElementById('today-worked');
   const statusEl = document.getElementById('today-status');
   const btnIn = document.getElementById('btn-in');
   const btnOut = document.getElementById('btn-out');
+  const locEl = document.getElementById('today-loc');
+  const noteEl = document.getElementById('track-note');
 
   if (!attendance) {
     inEl.textContent = outEl.textContent = workedEl.textContent = '—';
     statusEl.innerHTML = '<span class="badge not_in">Not marked</span>';
+    locEl.innerHTML = '';
     btnIn.disabled = false; btnOut.disabled = true;
+    noteEl.textContent = '📍 Location + a selfie are required for every punch.';
+    stopTracking();
     return;
   }
   inEl.textContent = fmtTime(attendance.clock_in);
@@ -61,18 +97,46 @@ async function loadToday() {
   statusEl.innerHTML = `<span class="badge ${attendance.status}">${label(attendance.status)}</span>`;
   btnIn.disabled = !!attendance.clock_in;
   btnOut.disabled = !attendance.clock_in || !!attendance.clock_out;
+
+  locEl.innerHTML = locLine(attendance, 'in') + (attendance.clock_out ? locLine(attendance, 'out') : '');
+
+  const onClock = !!attendance.clock_in && !attendance.clock_out;
+  if (onClock) {
+    noteEl.textContent = `📍 On the clock — location updates every ${PING_MIN} min (${pings} update${pings === 1 ? '' : 's'} so far today).`;
+    startTracking();
+  } else {
+    noteEl.textContent = `📍 Tracking stopped. ${pings} location update${pings === 1 ? '' : 's'} recorded today.`;
+    stopTracking();
+  }
 }
 
-document.getElementById('btn-in').onclick = async (e) => {
-  e.target.disabled = true;
-  try { await api('/attendance/clock-in', { method: 'POST' }); toast('Clocked in. Have a good day!'); await Promise.all([loadToday(), loadSummary(), loadHistory()]); }
-  catch (err) { toast(err.message, true); await loadToday(); }
-};
-document.getElementById('btn-out').onclick = async (e) => {
-  e.target.disabled = true;
-  try { await api('/attendance/clock-out', { method: 'POST' }); toast('Clocked out. See you tomorrow!'); await Promise.all([loadToday(), loadSummary(), loadHistory()]); }
-  catch (err) { toast(err.message, true); await loadToday(); }
-};
+/* ---- punch in / out: location + selfie required ---- */
+async function punch(kind) {
+  const btnIn = document.getElementById('btn-in');
+  const btnOut = document.getElementById('btn-out');
+  btnIn.disabled = btnOut.disabled = true;
+  try {
+    const proof = await CAPTURE.punchProof((msg) => toast(msg));
+    const path = kind === 'in' ? '/attendance/clock-in' : '/attendance/clock-out';
+    await api(path, { method: 'POST', body: proof });
+    toast(kind === 'in' ? 'Clocked in — photo + location saved' : 'Clocked out — photo + location saved');
+    await Promise.all([loadToday(), loadSummary(), loadHistory()]);
+  } catch (err) {
+    toast(err.message, true);
+    await loadToday();
+  }
+}
+document.getElementById('btn-in').onclick = () => punch('in');
+document.getElementById('btn-out').onclick = () => punch('out');
+
+/* ---- periodic location tracking ---- */
+function startTracking() {
+  if (tracker) return;
+  tracker = CAPTURE.startTracking(PING_MIN, async (pos) => {
+    try { await api('/attendance/ping', { method: 'POST', body: pos }); } catch { /* best effort */ }
+  });
+}
+function stopTracking() { if (tracker) { tracker.stop(); tracker = null; } }
 
 /* ---- month summary ---- */
 async function loadSummary() {
@@ -97,15 +161,16 @@ async function loadHistory() {
   const to = document.getElementById('hist-to').value;
   const { records } = await api(`/attendance/history?from=${from}&to=${to}`);
   const body = document.getElementById('hist-body');
-  if (!records.length) { body.innerHTML = '<tr><td colspan="6" class="empty">No records in this range.</td></tr>'; return; }
+  if (!records.length) { body.innerHTML = '<tr><td colspan="7" class="empty">No records in this range.</td></tr>'; return; }
   body.innerHTML = records.map((r) => `
     <tr>
       <td>${fmtDate(r.date)}</td>
       <td>${fmtTime(r.clock_in)}${r.is_late ? ' <span class="badge half_day" style="font-size:.7rem">late</span>' : ''}</td>
       <td>${fmtTime(r.clock_out)}</td>
       <td class="num">${r.worked_minutes ? fmtHours(r.worked_minutes / 60) : '—'}</td>
+      <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>
+      <td class="small">${r.in_map_url ? `<a href="${r.in_map_url}" target="_blank" rel="noopener"><span class="pin">📍</span> ${esc(r.in_address || 'View map')}</a>` : '<span class="muted">—</span>'}</td>
       <td><span class="badge ${r.status}">${label(r.status)}</span></td>
-      <td class="muted small">${esc(r.note || '')}</td>
     </tr>`).join('');
 }
 document.getElementById('hist-go').onclick = loadHistory;

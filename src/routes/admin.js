@@ -1,10 +1,12 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { db, todayStr, dateRange, isWeekend } from '../db.js';
+import { db, todayStr, dateRange, isWeekend, nextEmployeeCode, PING_INTERVAL_MINUTES } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 router.use(requireAdmin);
+
+const mapsUrl = (lat, lng) => (lat != null && lng != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);
 
 /* ----------------------------- Dashboard ----------------------------- */
 
@@ -14,18 +16,39 @@ router.get('/dashboard', (_req, res) => {
 
   const rows = db.prepare(`
     SELECT u.id, u.name, u.email, u.department, u.employee_code,
-           a.clock_in, a.clock_out, a.status, a.worked_minutes
+           a.clock_in, a.clock_out, a.status, a.worked_minutes,
+           a.in_lat, a.in_lng, a.in_address, a.in_photo,
+           a.out_lat, a.out_lng, a.out_address, a.out_photo
     FROM users u
     LEFT JOIN attendance a ON a.user_id = u.id AND a.date = ?
     WHERE u.status = 'active' AND u.role = 'user'
     ORDER BY u.name
   `).all(date);
 
-  const team = rows.map((r) => ({
-    ...r,
-    worked_hours: r.worked_minutes ? +(r.worked_minutes / 60).toFixed(2) : 0,
-    state: r.clock_in && !r.clock_out ? 'working' : r.clock_out ? 'done' : r.status === 'on_leave' ? 'on_leave' : 'not_in',
-  }));
+  const lastPing = db.prepare(`
+    SELECT p.user_id, p.lat, p.lng, p.address, p.captured_at
+    FROM location_pings p
+    JOIN (SELECT user_id, MAX(captured_at) AS m FROM location_pings WHERE date = ? GROUP BY user_id) x
+      ON x.user_id = p.user_id AND x.m = p.captured_at
+    WHERE p.date = ?
+  `).all(date, date);
+  const pingByUser = Object.fromEntries(lastPing.map((p) => [p.user_id, p]));
+
+  const team = rows.map((r) => {
+    const lp = pingByUser[r.id] || null;
+    return {
+      ...r,
+      worked_hours: r.worked_minutes ? +(r.worked_minutes / 60).toFixed(2) : 0,
+      state: r.clock_in && !r.clock_out ? 'working' : r.clock_out ? 'done' : r.status === 'on_leave' ? 'on_leave' : 'not_in',
+      in_map_url: mapsUrl(r.in_lat, r.in_lng),
+      out_map_url: mapsUrl(r.out_lat, r.out_lng),
+      last_seen: lp ? lp.captured_at : null,
+      last_lat: lp ? lp.lat : null,
+      last_lng: lp ? lp.lng : null,
+      last_address: lp ? lp.address : null,
+      last_map_url: lp ? mapsUrl(lp.lat, lp.lng) : null,
+    };
+  });
 
   const stats = {
     date,
@@ -39,7 +62,7 @@ router.get('/dashboard', (_req, res) => {
   const pendingLeaves = db.prepare("SELECT COUNT(*) AS n FROM leaves WHERE status = 'pending'").get().n;
   const pendingRegs = db.prepare("SELECT COUNT(*) AS n FROM regularizations WHERE status = 'pending'").get().n;
 
-  res.json({ stats, team, pending: { leaves: pendingLeaves, regularizations: pendingRegs } });
+  res.json({ stats, team, pending: { leaves: pendingLeaves, regularizations: pendingRegs }, ping_interval_minutes: PING_INTERVAL_MINUTES });
 });
 
 /* ----------------------------- Employees ----------------------------- */
@@ -51,20 +74,24 @@ function publicUser(u) {
 
 router.get('/employees', (_req, res) => {
   const rows = db.prepare('SELECT * FROM users ORDER BY role DESC, name').all().map(publicUser);
-  res.json({ employees: rows });
+  res.json({ employees: rows, next_employee_code: nextEmployeeCode() });
 });
 
 router.post('/employees', (req, res) => {
-  const { name, email, password, role, department, employee_code, leave_balance } = req.body || {};
+  const { name, email, password, role, department, leave_balance } = req.body || {};
+  let { employee_code } = req.body || {};
   if (!name || !email || !password) return res.status(400).json({ error: 'name, email and password are required' });
   if (!['admin', 'user'].includes(role || 'user')) return res.status(400).json({ error: 'role must be admin or user' });
   if (db.prepare('SELECT 1 FROM users WHERE lower(email) = lower(?)').get(email)) {
     return res.status(409).json({ error: 'An account with this email already exists' });
   }
+  // Employee IDs are generated automatically when not supplied.
+  if (!employee_code) employee_code = nextEmployeeCode();
+
   const info = db.prepare(`
     INSERT INTO users (name, email, password_hash, role, department, employee_code, leave_balance)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(name, email, bcrypt.hashSync(password, 10), role || 'user', department || null, employee_code || null, leave_balance ?? 18);
+  `).run(name, email, bcrypt.hashSync(password, 10), role || 'user', department || null, employee_code, leave_balance ?? 18);
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({ employee: publicUser(u) });
 });
@@ -114,7 +141,77 @@ router.get('/attendance', (req, res) => {
     ORDER BY a.date DESC, u.name
     LIMIT 1000
   `).all(...params);
-  res.json({ records: rows.map((r) => ({ ...r, worked_hours: r.worked_minutes ? +(r.worked_minutes / 60).toFixed(2) : 0 })) });
+  res.json({
+    records: rows.map((r) => ({
+      ...r,
+      worked_hours: r.worked_minutes ? +(r.worked_minutes / 60).toFixed(2) : 0,
+      in_map_url: mapsUrl(r.in_lat, r.in_lng),
+      out_map_url: mapsUrl(r.out_lat, r.out_lng),
+    })),
+  });
+});
+
+/* ----------------------------- Locations ----------------------------- */
+
+/** Latest known location for every employee on the clock today. */
+router.get('/locations', (req, res) => {
+  const date = req.query.date || todayStr();
+
+  const employees = db.prepare(`
+    SELECT u.id, u.name, u.department, u.employee_code,
+           a.clock_in, a.clock_out, a.status,
+           a.in_lat, a.in_lng, a.in_address, a.in_photo,
+           a.out_lat, a.out_lng, a.out_address, a.out_photo
+    FROM users u
+    LEFT JOIN attendance a ON a.user_id = u.id AND a.date = ?
+    WHERE u.status = 'active' AND u.role = 'user'
+    ORDER BY u.name
+  `).all(date);
+
+  const pings = db.prepare(`
+    SELECT id, user_id, lat, lng, accuracy, address, captured_at, source
+    FROM location_pings WHERE date = ? ORDER BY captured_at DESC
+  `).all(date);
+
+  const byUser = {};
+  for (const p of pings) (byUser[p.user_id] ||= []).push(p);
+
+  const records = employees.map((e) => {
+    const list = byUser[e.id] || [];
+    const latest = list[0] || null;
+    return {
+      user_id: e.id,
+      name: e.name,
+      department: e.department,
+      employee_code: e.employee_code,
+      status: e.status,
+      clock_in: e.clock_in,
+      clock_out: e.clock_out,
+      on_clock: !!e.clock_in && !e.clock_out,
+      in_lat: e.in_lat, in_lng: e.in_lng, in_address: e.in_address, in_photo: e.in_photo,
+      out_lat: e.out_lat, out_lng: e.out_lng, out_address: e.out_address, out_photo: e.out_photo,
+      in_map_url: mapsUrl(e.in_lat, e.in_lng),
+      out_map_url: mapsUrl(e.out_lat, e.out_lng),
+      ping_count: list.length,
+      last_seen: latest ? latest.captured_at : null,
+      last_lat: latest ? latest.lat : null,
+      last_lng: latest ? latest.lng : null,
+      last_address: latest ? latest.address : null,
+      last_map_url: latest ? mapsUrl(latest.lat, latest.lng) : null,
+    };
+  });
+
+  res.json({ date, ping_interval_minutes: PING_INTERVAL_MINUTES, records });
+});
+
+/** Full location trail for one employee on a day. */
+router.get('/locations/:userId/trail', (req, res) => {
+  const date = req.query.date || todayStr();
+  const rows = db.prepare(`
+    SELECT lat, lng, accuracy, address, captured_at, source
+    FROM location_pings WHERE user_id = ? AND date = ? ORDER BY captured_at
+  `).all(Number(req.params.userId), date);
+  res.json({ date, pings: rows.map((p) => ({ ...p, map_url: mapsUrl(p.lat, p.lng) })) });
 });
 
 /* ----------------------------- Leaves ----------------------------- */

@@ -68,6 +68,6 @@ if ('serviceWorker' in navigator) {
     if (hadController && !reloading) { reloading = true; location.reload(); }
   });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3').catch(() => {});
+    navigator.serviceWorker.register('/sw.js?v=4').catch(() => {});
   });
 }

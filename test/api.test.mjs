@@ -55,6 +55,8 @@ try {
   const anon = makeClient();
   const admin = makeClient();
   const user = makeClient();
+  const PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const PROOF = { lat: 28.6139, lng: 77.209, accuracy: 12, address: 'Connaught Place, New Delhi', photo: PHOTO };
 
   console.log('\n[health]');
   let r = await anon('/api/health');
@@ -81,6 +83,9 @@ try {
   r = await admin('/api/admin/employees/' + newId, { method: 'PATCH', body: { status: 'inactive' } });
   check('deactivate', r.status === 200 && r.data.employee.status === 'inactive');
 
+  r = await admin('/api/admin/employees', { method: 'POST', body: { name: 'Auto Code', email: 'auto@vutto.demo', password: 'Test@123' } });
+  check('employee id auto-generated', r.status === 201 && /^VUT-\d{4}$/.test(r.data.employee?.employee_code || ''), JSON.stringify(r.data.employee));
+
   console.log('\n[admin approvals]');
   r = await admin('/api/admin/leaves?status=pending');
   const pendingLeave = r.data.records?.[0];
@@ -101,6 +106,19 @@ try {
   r = await admin('/api/admin/reports/summary');
   check('report 200', r.status === 200 && Array.isArray(r.data.records), JSON.stringify(r.data).slice(0, 120));
 
+  console.log('\n[admin locations]');
+  r = await admin('/api/admin/locations');
+  check('locations 200', r.status === 200 && Array.isArray(r.data.records), JSON.stringify(r.data).slice(0, 120));
+  check('locations expose punch address', r.data.records.some((x) => x.in_address || x.last_address));
+  check('locations expose map links', r.data.records.some((x) => x.in_map_url || x.last_map_url));
+  const withTrail = r.data.records.find((x) => x.ping_count > 0);
+  if (withTrail) {
+    const t = await admin(`/api/admin/locations/${withTrail.user_id}/trail`);
+    check('trail endpoint returns pings', t.status === 200 && t.data.pings.length > 0, 'n=' + t.data.pings?.length);
+  }
+  r = await admin('/api/admin/dashboard');
+  check('dashboard carries punch location', r.data.team.some((t) => t.in_map_url));
+
   console.log('\n[user login + punch]');
   r = await user('/api/auth/login', { method: 'POST', body: { email: 'aarav@vutto.demo', password: 'User@123' } });
   check('user login', r.status === 200 && r.data.user.role === 'user');
@@ -108,12 +126,36 @@ try {
   check('user blocked from admin', r.status === 403, 'got ' + r.status);
   r = await user('/api/attendance/today');
   check('today 200', r.status === 200);
-  r = await user('/api/attendance/clock-in', { method: 'POST' });
-  check('clock in ok', r.status === 200 && r.data.attendance.clock_in, JSON.stringify(r.data).slice(0, 120));
-  r = await user('/api/attendance/clock-in', { method: 'POST' });
+
+  // Location + selfie are mandatory on every punch.
+  r = await user('/api/attendance/clock-in', { method: 'POST', body: {} });
+  check('clock in blocked without location/photo', r.status === 400, 'got ' + r.status);
+  r = await user('/api/attendance/clock-in', { method: 'POST', body: { lat: 28.6, lng: 77.2 } });
+  check('clock in blocked without photo', r.status === 400, 'got ' + r.status);
+  r = await user('/api/attendance/clock-in', { method: 'POST', body: { photo: PHOTO } });
+  check('clock in blocked without location', r.status === 400, 'got ' + r.status);
+
+  r = await user('/api/attendance/clock-in', { method: 'POST', body: PROOF });
+  check('clock in ok with location + photo', r.status === 200 && r.data.attendance.clock_in && r.data.attendance.in_lat, JSON.stringify(r.data).slice(0, 160));
+  check('clock-in photo stored', typeof r.data.attendance?.in_photo === 'string' && r.data.attendance.in_photo.startsWith('data:image/'));
+  check('clock-in address stored', r.data.attendance?.in_address === PROOF.address);
+  check('clock-in map url built', typeof r.data.attendance?.in_map_url === 'string' && r.data.attendance.in_map_url.includes('maps'));
+
+  r = await user('/api/attendance/clock-in', { method: 'POST', body: PROOF });
   check('double clock-in blocked', r.status === 409);
-  r = await user('/api/attendance/clock-out', { method: 'POST' });
-  check('clock out ok', r.status === 200 && r.data.attendance.clock_out, JSON.stringify(r.data).slice(0, 120));
+
+  r = await user('/api/attendance/ping', { method: 'POST', body: { lat: 28.61, lng: 77.21, accuracy: 20, address: 'Connaught Place, New Delhi' } });
+  check('10-min location ping accepted', r.status === 200 && r.data.ok);
+  r = await user('/api/attendance/ping', { method: 'POST', body: {} });
+  check('ping without coords rejected', r.status === 400);
+
+  r = await user('/api/attendance/clock-out', { method: 'POST', body: { ...PROOF, lat: 28.62, lng: 77.22 } });
+  check('clock out ok with location + photo', r.status === 200 && r.data.attendance.clock_out && r.data.attendance.out_lat, JSON.stringify(r.data).slice(0, 160));
+  r = await user('/api/attendance/clock-out', { method: 'POST', body: PROOF });
+  check('double clock-out blocked', r.status === 409);
+
+  r = await user('/api/attendance/trail');
+  check('own location trail recorded', r.status === 200 && r.data.pings.length >= 3, 'n=' + r.data.pings?.length);
   r = await user('/api/attendance/history');
   check('history rows', r.status === 200 && r.data.records.length > 0, 'rows=' + r.data.records?.length);
   r = await user('/api/attendance/summary');

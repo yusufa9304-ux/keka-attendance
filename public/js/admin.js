@@ -28,8 +28,31 @@ document.querySelectorAll('.tabs button').forEach((b) => {
 });
 
 async function refreshAll() {
-  await Promise.all([loadDashboard(), loadLeaves(), loadRegs(), loadEmployees(), loadReport()]);
+  await Promise.all([loadDashboard(), loadLocations(), loadLeaves(), loadRegs(), loadEmployees(), loadReport()]);
 }
+
+/* ---- photo viewer ---- */
+window.viewPhoto = (src) => {
+  let m = document.getElementById('photo-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'photo-modal'; m.className = 'modal-bg';
+    m.innerHTML = '<div class="modal photo-viewer"><h2>Punch photo</h2><img id="photo-img" alt="Punch photo" /><div class="foot"><button class="btn ghost" id="photo-close">Close</button></div></div>';
+    document.body.appendChild(m);
+    m.onclick = (e) => { if (e.target === m) m.classList.remove('open'); };
+    m.querySelector('#photo-close').onclick = () => m.classList.remove('open');
+  }
+  m.querySelector('#photo-img').src = src;
+  m.classList.add('open');
+};
+
+const photoCell = (src) => (src
+  ? `<img class="punch-photo" src="${src}" alt="punch photo" onclick="viewPhoto(this.src)" />`
+  : '<span class="muted small">—</span>');
+
+const locCell = (lat, lng, address, mapUrl) => (lat != null
+  ? `<a href="${mapUrl}" target="_blank" rel="noopener" class="small"><span class="pin">📍</span> ${esc(address || `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`)}</a>`
+  : '<span class="muted small">—</span>');
 
 /* ---- dashboard ---- */
 async function loadDashboard() {
@@ -54,7 +77,28 @@ async function loadDashboard() {
       <td>${fmtTime(t.clock_in)}</td>
       <td>${fmtTime(t.clock_out)}</td>
       <td class="num">${t.worked_minutes ? fmtHours(t.worked_minutes / 60) : '—'}</td>
+      <td>${photoCell(t.in_photo)}</td>
+      <td>${locCell(t.in_lat, t.in_lng, t.in_address, t.in_map_url)}</td>
       <td><span class="badge ${t.state}">${label(t.state)}</span></td>
+    </tr>`).join('');
+}
+
+/* ---- live locations ---- */
+async function loadLocations() {
+  const data = await api('/admin/locations');
+  const body = document.getElementById('loc-body');
+  const note = document.getElementById('loc-note');
+  if (note) note.textContent = `${data.date} · updates every ${data.ping_interval_minutes} min`;
+  if (!body) return;
+  if (!data.records.length) { body.innerHTML = '<tr><td colspan="6" class="empty">No employees yet.</td></tr>'; return; }
+  body.innerHTML = data.records.map((r) => `
+    <tr>
+      <td><b>${esc(r.name)}</b><div class="muted small">${esc(r.employee_code || '')}</div></td>
+      <td>${r.on_clock ? '<span class="badge working">On clock</span>' : (r.clock_out ? '<span class="badge done">Clocked out</span>' : '<span class="badge not_in">Not in</span>')}</td>
+      <td>${locCell(r.in_lat, r.in_lng, r.in_address, r.in_map_url)}</td>
+      <td class="small">${r.last_seen ? fmtTime(r.last_seen) : '<span class="muted">—</span>'}</td>
+      <td>${locCell(r.last_lat, r.last_lng, r.last_address, r.last_map_url)}</td>
+      <td class="num">${r.ping_count}</td>
     </tr>`).join('');
 }
 
@@ -141,7 +185,6 @@ document.getElementById('e-save').onclick = async () => {
     name: document.getElementById('e-name').value.trim(),
     email: document.getElementById('e-email').value.trim(),
     password: document.getElementById('e-pass').value,
-    employee_code: document.getElementById('e-code').value.trim() || null,
     department: document.getElementById('e-dept').value.trim() || null,
     role: document.getElementById('e-role').value,
     leave_balance: Number(document.getElementById('e-bal').value) || 18,
@@ -151,7 +194,7 @@ document.getElementById('e-save').onclick = async () => {
     await api('/admin/employees', { method: 'POST', body });
     toast('Employee created');
     closeModal();
-    ['e-name', 'e-email', 'e-pass', 'e-code', 'e-dept'].forEach((id) => (document.getElementById(id).value = ''));
+    ['e-name', 'e-email', 'e-pass', 'e-dept'].forEach((id) => (document.getElementById(id).value = ''));
     await loadEmployees();
   } catch (err) { toast(err.message, true); }
 };

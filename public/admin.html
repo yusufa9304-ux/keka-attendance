@@ -9,13 +9,14 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/css/style.css?v=3" />
+  <link rel="stylesheet" href="/css/style.css?v=4" />
 </head>
 <body>
   <nav class="nav">
     <div class="brand"><img src="/img/logo.png" alt="Vutto" class="brand-logo" /> <span class="brand-sub">Attendance</span> <span class="badge role-admin" style="margin-left:4px">Admin</span></div>
     <div class="links">
       <button class="active" data-tab="team">Team Today</button>
+      <button data-tab="locations">Locations</button>
       <button data-tab="approvals">Approvals <span id="appr-dot" class="badge pending" style="display:none">0</span></button>
       <button data-tab="employees">Employees</button>
       <button data-tab="reports">Reports</button>
@@ -52,8 +53,22 @@
       <div class="card">
         <h2>Team status — today</h2>
         <table>
-          <thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>State</th></tr></thead>
-          <tbody id="team-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>State</th></tr></thead>
+          <tbody id="team-body"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ LOCATIONS ============ -->
+    <section data-panel="locations" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+          <h2>Live locations</h2>
+          <span class="ping-count" id="loc-note">—</span>
+        </div>
+        <table>
+          <thead><tr><th>Employee</th><th>On clock</th><th>Check-in location</th><th>Last seen</th><th>Latest location</th><th class="num">Updates</th></tr></thead>
+          <tbody id="loc-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -113,17 +128,17 @@
   <div class="modal-bg" id="modal">
     <div class="modal">
       <h2>Add employee</h2>
+      <p class="small muted">The employee ID is generated automatically (VUT-0006, VUT-0007, …).</p>
       <div class="field"><label>Full name</label><input id="e-name" placeholder="e.g. Meera Joshi" /></div>
-      <div class="field"><label>Work email</label><input id="e-email" type="email" placeholder="name@company.com" /></div>
+      <div class="field"><label>Work email</label><input id="e-email" type="email" placeholder="name@vutto.in" /></div>
       <div class="row2">
         <div class="field"><label>Password</label><input id="e-pass" placeholder="Temp password" /></div>
-        <div class="field"><label>Employee code</label><input id="e-code" placeholder="KKA-0006" /></div>
+        <div class="field"><label>Department</label><input id="e-dept" placeholder="Engineering" /></div>
       </div>
       <div class="row2">
-        <div class="field"><label>Department</label><input id="e-dept" placeholder="Engineering" /></div>
         <div class="field"><label>Role</label><select id="e-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
+        <div class="field"><label>Leave balance (days)</label><input id="e-bal" type="number" value="18" /></div>
       </div>
-      <div class="field"><label>Leave balance (days)</label><input id="e-bal" type="number" value="18" /></div>
       <div class="foot">
         <button class="btn ghost" onclick="closeModal()">Cancel</button>
         <button class="btn primary" id="e-save">Create</button>
@@ -131,7 +146,7 @@
     </div>
   </div>
 
-  <script src="/js/api.js?v=3"></script>
-  <script src="/js/admin.js?v=3"></script>
+  <script src="/js/api.js?v=4"></script>
+  <script src="/js/admin.js?v=4"></script>
 </body>
 </html>

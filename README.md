@@ -13,16 +13,24 @@ Node.js + Express + SQLite (`better-sqlite3`) on the backend, plain HTML/CSS/JS 
 ### Employee (User)
 - **Session login** with hashed passwords (bcrypt).
 - **Web punch in / punch out** with a live clock, today's worked hours and status.
+- **Photo + location are mandatory on every punch** — the browser asks for a selfie (camera, with an upload fallback) and the GPS location, and both are stored with the punch.
+- **Location trail** — while you are on the clock the app re-sends your location every **10 minutes** (only while the tab/app is open, and only if location permission was granted).
 - **My attendance** — filterable history, late-punch marker, worked hours.
 - **Monthly summary** — present / half-day / absent days and total hours.
 - **Leave management** — apply for casual / sick / earned / loss-of-pay leave, see remaining balance, cancel a pending request.
 - **Regularization** — raise a request to correct a missed or wrong punch.
 
 ### Admin
-- **Team dashboard** — who is present, working now, absent or on leave today, with per-employee punch times.
+- **Team dashboard** — who is present, working now, absent or on leave today, with per-employee punch times, the **punch selfie** and the **check-in location** (a map link).
+- **Live locations** — a dedicated tab showing each employee's check-in location, last-seen time, latest tracked location and how many location updates were received that day.
+- **Employee IDs are generated automatically** — adding an employee assigns the next code (`VUT-0006`, `VUT-0007`, …); there is no field to fill in.
 - **Approvals** — approve/reject leave and regularization requests in one place, with a pending-count badge.
 - **Employee management** — add employees, promote/demote between User and Admin, activate/deactivate accounts.
 - **Monthly reports** — per-employee present / half / absent / leave days and total hours, with totals.
+
+### Where the location comes from
+
+Location is read in the browser with the **Geolocation API** and stored with the punch (latitude, longitude, accuracy) plus a best-effort street address (reverse-geocoded via OpenStreetMap's Nominatim; if that call fails the coordinates are shown instead). Every location shows as a **Google Maps link**. Nothing is tracked while the employee is clocked out, and the periodic updates only run while the app is open.
 
 ### How the roles differ
 | | User | Admin |

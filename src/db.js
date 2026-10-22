@@ -36,7 +36,23 @@ CREATE TABLE IF NOT EXISTS attendance (
                  CHECK (status IN ('present','half_day','absent','on_leave','weekly_off','holiday')),
   worked_minutes INTEGER NOT NULL DEFAULT 0,
   note           TEXT,
+  -- punch-time location + selfie (photo is a data URL)
+  in_lat REAL, in_lng REAL, in_accuracy REAL, in_address TEXT, in_photo TEXT,
+  out_lat REAL, out_lng REAL, out_accuracy REAL, out_address TEXT, out_photo TEXT,
   UNIQUE (user_id, date)
+);
+
+-- Periodic location trail while an employee is on the clock (every ~10 min).
+CREATE TABLE IF NOT EXISTS location_pings (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date          TEXT    NOT NULL,
+  lat           REAL    NOT NULL,
+  lng           REAL    NOT NULL,
+  accuracy      REAL,
+  address       TEXT,
+  captured_at   TEXT    NOT NULL,
+  source        TEXT    NOT NULL DEFAULT 'auto' CHECK (source IN ('auto','punch','manual'))
 );
 
 CREATE TABLE IF NOT EXISTS leaves (
@@ -72,7 +88,16 @@ CREATE TABLE IF NOT EXISTS regularizations (
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
 CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id);
 CREATE INDEX IF NOT EXISTS idx_leaves_status ON leaves(status);
+CREATE INDEX IF NOT EXISTS idx_pings_user_date ON location_pings(user_id, date);
 `);
+
+/* --- migration for databases created before the location/photo columns --- */
+{
+  const cols = db.prepare('PRAGMA table_info(attendance)').all().map((c) => c.name);
+  const add = (name, ddl) => { if (!cols.includes(name)) db.exec(`ALTER TABLE attendance ADD COLUMN ${name} ${ddl}`); };
+  add('in_lat', 'REAL'); add('in_lng', 'REAL'); add('in_accuracy', 'REAL'); add('in_address', 'TEXT'); add('in_photo', 'TEXT');
+  add('out_lat', 'REAL'); add('out_lng', 'REAL'); add('out_accuracy', 'REAL'); add('out_address', 'TEXT'); add('out_photo', 'TEXT');
+}
 
 /* ---------- small helpers used across routes ---------- */
 
@@ -104,4 +129,16 @@ export function isWeekend(dateStr) {
   return day === 0 || day === 6;
 }
 
+/** Next employee code, e.g. VUT-0006. */
+export function nextEmployeeCode(prefix = 'VUT') {
+  const rows = db.prepare("SELECT employee_code FROM users WHERE employee_code LIKE ?").all(prefix + '-%');
+  let max = 0;
+  for (const r of rows) {
+    const n = parseInt(String(r.employee_code).replace(/\D+/g, ''), 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return `${prefix}-${String(max + 1).padStart(4, '0')}`;
+}
+
 export const WORK = { start: '09:30', end: '18:30', fullDayMinutes: 480, halfDayMinutes: 240 };
+export const PING_INTERVAL_MINUTES = 10;
