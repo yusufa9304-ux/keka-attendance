@@ -68,11 +68,31 @@ async function loadDashboard() {
   dot.style.display = total ? 'inline-block' : 'none';
   dot.textContent = total;
 
+  // Surface pending work on the dashboard itself, so regularizations are not
+  // hidden behind the Approvals sub-tab.
+  const pcard = document.getElementById('pending-card');
+  if (pcard) {
+    if (total) {
+      pcard.classList.remove('hidden');
+      pcard.innerHTML = `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span class="badge pending">${total}</span>
+        <b>pending approval${total > 1 ? 's' : ''}</b>
+        <span class="muted small">waiting for you</span>
+        <span style="flex:1"></span>
+        ${pending.leaves ? `<button class="btn ghost sm" data-goto="leaves">Leave requests (${pending.leaves})</button>` : ''}
+        ${pending.regularizations ? `<button class="btn primary sm" data-goto="regs">Regularizations (${pending.regularizations})</button>` : ''}
+      </div>`;
+      pcard.querySelectorAll('[data-goto]').forEach((el) => (el.onclick = () => gotoApprovals(el.dataset.goto)));
+    } else {
+      pcard.classList.add('hidden');
+    }
+  }
+
   const body = document.getElementById('team-body');
   if (!team.length) { body.innerHTML = '<tr><td colspan="6" class="empty">No employees yet.</td></tr>'; return; }
   body.innerHTML = team.map((t) => `
     <tr>
-      <td><b>${esc(t.name)}</b><div class="muted small">${esc(t.employee_code || '')}</div></td>
+      <td><b>${esc(t.name)}</b>${t.pending_regularizations ? ` <span class="badge pending">${t.pending_regularizations} pending</span>` : ''}<div class="muted small">${esc(t.employee_code || '')}</div></td>
       <td>${esc(t.department || '—')}</td>
       <td>${fmtTime(t.clock_in)}</td>
       <td>${fmtTime(t.clock_out)}</td>
@@ -102,9 +122,22 @@ async function loadLocations() {
     </tr>`).join('');
 }
 
+/* Jump straight to an approvals sub-tab from the dashboard card. */
+function gotoApprovals(which) {
+  const tab = document.querySelector('.nav .links button[data-tab="approvals"]');
+  if (tab) tab.click();
+  const sub = document.querySelector(`.tabs button[data-atab="${which}"]`);
+  if (sub) sub.click();
+}
+
 /* ---- leave approvals ---- */
 async function loadLeaves() {
   const { records } = await api('/admin/leaves');
+  const el = document.getElementById('atab-leaves');
+  if (el) {
+    const n = records.filter((r) => r.status === 'pending').length;
+    el.innerHTML = `Leave requests ${n ? `<span class="badge pending">${n}</span>` : ''}`;
+  }
   const body = document.getElementById('leaves-body');
   if (!records.length) { body.innerHTML = '<tr><td colspan="7" class="empty">No leave requests.</td></tr>'; return; }
   body.innerHTML = records.map((r) => `
@@ -128,6 +161,11 @@ window.reviewLeave = async (id, action) => {
 /* ---- regularization approvals ---- */
 async function loadRegs() {
   const { records } = await api('/admin/regularizations');
+  const el = document.getElementById('atab-regs');
+  if (el) {
+    const n = records.filter((r) => r.status === 'pending').length;
+    el.innerHTML = `Regularizations ${n ? `<span class="badge pending">${n}</span>` : ''}`;
+  }
   const body = document.getElementById('regs-body');
   if (!records.length) { body.innerHTML = '<tr><td colspan="6" class="empty">No regularization requests.</td></tr>'; return; }
   body.innerHTML = records.map((r) => `

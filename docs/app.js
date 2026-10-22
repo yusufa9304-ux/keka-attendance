@@ -467,7 +467,11 @@ function renderAdmin() {
   const u = me();
   if (!ui.tab || !['team', 'locations', 'approvals', 'employees', 'reports'].includes(ui.tab)) ui.tab = 'team';
   if (!ui.atab) ui.atab = 'leaves';
-  const pending = DB.leaves.filter((l) => l.status === 'pending').length + DB.regularizations.filter((r) => r.status === 'pending').length;
+  const pendingLeaves = DB.leaves.filter((l) => l.status === 'pending').length;
+  const pendingRegs = DB.regularizations.filter((r) => r.status === 'pending').length;
+  const pending = pendingLeaves + pendingRegs;
+  const pendingRegByUser = {};
+  for (const r of DB.regularizations) if (r.status === 'pending') pendingRegByUser[r.user_id] = (pendingRegByUser[r.user_id] || 0) + 1;
   const tabs = [['team', 'Team Today'], ['locations', 'Locations'], ['approvals', `Approvals ${pending ? `<span class="badge pending">${pending}</span>` : ''}`], ['employees', 'Employees'], ['reports', 'Reports']];
   document.getElementById('nav-links').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}</button>`).join('');
 
@@ -496,7 +500,17 @@ function renderAdmin() {
       <div class="card stat"><span class="label">Present today</span><span class="value">${stats.present}</span><span class="sub">clocked in</span></div>
       <div class="card stat"><span class="label">Working now</span><span class="value">${stats.working}</span><span class="sub">not clocked out</span></div>
       <div class="card stat"><span class="label">On leave / absent</span><span class="value">${stats.absent + stats.leave}</span><span class="sub">${stats.absent} absent · ${stats.leave} on leave</span></div>
-    </div>`;
+    </div>
+    ${pending ? `<div class="card pending-card" style="margin-bottom:18px;border-color:var(--brand-mid)">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span class="badge pending">${pending}</span>
+        <b>pending approval${pending > 1 ? 's' : ''}</b>
+        <span class="muted small">waiting for you</span>
+        <span style="flex:1"></span>
+        ${pendingLeaves ? `<button class="btn ghost sm" data-goto="leaves">Leave requests (${pendingLeaves})</button>` : ''}
+        ${pendingRegs ? `<button class="btn primary sm" data-goto="regs">Regularizations (${pendingRegs})</button>` : ''}
+      </div>
+    </div>` : ''}`;
 
   let panel = '';
   const locCell = (lat, lng, address) => (lat != null
@@ -510,7 +524,7 @@ function renderAdmin() {
     panel = `<div class="card"><h2>Team status — today</h2>
       <table><thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>State</th></tr></thead>
       <tbody>${team.length ? team.map(({ e, a, state }) => `<tr>
-        <td><b>${esc(e.name)}</b><div class="muted small">${esc(e.employee_code || '')}</div></td>
+        <td><b>${esc(e.name)}</b>${pendingRegByUser[e.id] ? ` <span class="badge pending" title="pending regularization">${pendingRegByUser[e.id]} pending</span>` : ''}<div class="muted small">${esc(e.employee_code || '')}</div></td>
         <td>${esc(e.department || '—')}</td><td>${fmtTime(a && a.clock_in)}</td><td>${fmtTime(a && a.clock_out)}</td>
         <td class="num">${a && a.worked_minutes ? fmtHours(a.worked_minutes / 60) : '—'}</td>
         <td>${photoCell(a && a.in_photo)}</td>
@@ -538,8 +552,8 @@ function renderAdmin() {
     const leaves = DB.leaves.slice().sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
     const regs = DB.regularizations.slice().sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
     panel = `<div class="tabs">
-        <button data-atab="leaves" class="${ui.atab === 'leaves' ? 'active' : ''}">Leave requests</button>
-        <button data-atab="regs" class="${ui.atab === 'regs' ? 'active' : ''}">Regularizations</button>
+        <button data-atab="leaves" class="${ui.atab === 'leaves' ? 'active' : ''}">Leave requests ${pendingLeaves ? `<span class="badge pending">${pendingLeaves}</span>` : ''}</button>
+        <button data-atab="regs" class="${ui.atab === 'regs' ? 'active' : ''}">Regularizations ${pendingRegs ? `<span class="badge pending">${pendingRegs}</span>` : ''}</button>
       </div>
       <div class="card ${ui.atab === 'leaves' ? '' : 'hidden'}"><h2>Leave requests</h2>
         <table><thead><tr><th>Employee</th><th>Type</th><th>From → To</th><th class="num">Days</th><th>Reason</th><th>Status</th><th></th></tr></thead>
@@ -621,6 +635,9 @@ function bindUser() {
 
 function bindAdmin() {
   const r = document.getElementById('refresh'); if (r) r.onclick = () => { toast('Refreshed'); render(); };
+  mainEl().querySelectorAll('[data-goto]').forEach((el) => (el.onclick = () => {
+    ui.tab = 'approvals'; ui.atab = el.dataset.goto; render();
+  }));
   const ae = document.getElementById('add-emp'); if (ae) ae.onclick = openAdd;
   const rm = document.getElementById('rep-month'); if (rm) rm.onchange = () => { ui.repMonth = rm.value; render(); };
   mainEl().querySelectorAll('[data-lv]').forEach((el) => (el.onclick = () => reviewLeave(Number(el.dataset.lv), el.dataset.act)));

@@ -41,6 +41,8 @@
       <button class="btn" onclick="refreshAll()">↻ Refresh</button>
     </div>
 
+    <div id="pending-card" class="card hidden" style="margin-bottom:18px;border-color:var(--brand-mid)"></div>
+
     <div class="grid cols-4" style="margin-bottom:18px">
       <div class="card stat"><span class="label">Employees</span><span class="value" id="s-total">0</span><span class="sub">active</span></div>
       <div class="card stat"><span class="label">Present today</span><span class="value" id="s-present">0</span><span class="sub">clocked in</span></div>
@@ -76,8 +78,8 @@
     <!-- ============ APPROVALS ============ -->
     <section data-panel="approvals" class="hidden">
       <div class="tabs">
-        <button class="active" data-atab="leaves">Leave requests</button>
-        <button data-atab="regs">Regularizations</button>
+        <button class="active" data-atab="leaves" id="atab-leaves">Leave requests</button>
+        <button data-atab="regs" id="atab-regs">Regularizations</button>
       </div>
       <div class="card" data-apanel="leaves">
         <h2>Leave requests</h2>

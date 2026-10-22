@@ -47,6 +47,7 @@ router.get('/dashboard', (_req, res) => {
       last_lng: lp ? lp.lng : null,
       last_address: lp ? lp.address : null,
       last_map_url: lp ? mapsUrl(lp.lat, lp.lng) : null,
+      pending_regularizations: 0,
     };
   });
 
@@ -61,6 +62,11 @@ router.get('/dashboard', (_req, res) => {
 
   const pendingLeaves = db.prepare("SELECT COUNT(*) AS n FROM leaves WHERE status = 'pending'").get().n;
   const pendingRegs = db.prepare("SELECT COUNT(*) AS n FROM regularizations WHERE status = 'pending'").get().n;
+
+  // Per-employee pending regularization count, so the roster can flag it.
+  const perUser = db.prepare("SELECT user_id, COUNT(*) AS n FROM regularizations WHERE status = 'pending' GROUP BY user_id").all();
+  const pendingRegByUser = Object.fromEntries(perUser.map((r) => [r.user_id, r.n]));
+  for (const t of team) t.pending_regularizations = pendingRegByUser[t.id] || 0;
 
   res.json({ stats, team, pending: { leaves: pendingLeaves, regularizations: pendingRegs }, ping_interval_minutes: PING_INTERVAL_MINUTES });
 });
