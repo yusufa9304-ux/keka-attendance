@@ -101,6 +101,7 @@
   <div class="wrap" id="main"></div>
   <div class="vutto-foot">Vutto Attendance · demo build
     <button id="install-btn" class="btn sm primary hidden" style="margin-left:8px" onclick="vuttoInstall()">Install app</button>
+    <button id="reset-demo" class="btn sm ghost" style="margin-left:8px" type="button">Reset demo data</button>
   </div>
 </div>
 
@@ -136,7 +137,8 @@
   window.addEventListener('unhandledrejection', (e) => showFatal((e.reason && e.reason.message) || 'unhandled error'));
 
   // One-click recovery: drop the service worker + caches + demo data, then reload.
-  document.getElementById('reset-app').onclick = async () => {
+  // Wired to both the sign-in button and the in-app "Reset demo data" button.
+  async function resetEverything() {
     try {
       if ('serviceWorker' in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -149,7 +151,9 @@
       localStorage.clear();
     } catch (e) { /* ignore */ }
     location.replace(location.pathname + '?fresh=' + Date.now());
-  };
+  }
+  document.getElementById('reset-app').onclick = resetEverything;
+  document.getElementById('reset-demo').onclick = resetEverything;
 
   // Show an "Install app" button when the browser offers it.
   let deferredPrompt = null;
