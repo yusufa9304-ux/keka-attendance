@@ -26,6 +26,17 @@ CREATE TABLE IF NOT EXISTS users (
   created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS sites (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT    NOT NULL,
+  address     TEXT,
+  lat         REAL    NOT NULL,
+  lng         REAL    NOT NULL,
+  radius_m    INTEGER NOT NULL DEFAULT 250,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS attendance (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -39,6 +50,12 @@ CREATE TABLE IF NOT EXISTS attendance (
   -- punch-time location + selfie (photo is a data URL)
   in_lat REAL, in_lng REAL, in_accuracy REAL, in_address TEXT, in_photo TEXT,
   out_lat REAL, out_lng REAL, out_accuracy REAL, out_address TEXT, out_photo TEXT,
+  -- geofence result at punch time (distance from the employee's assigned site)
+  in_site_id INTEGER, in_distance_m REAL, in_inside INTEGER,
+  out_site_id INTEGER, out_distance_m REAL, out_inside INTEGER,
+  -- fake-GPS heuristics
+  in_spoof_score INTEGER, in_spoof_flags TEXT,
+  out_spoof_score INTEGER, out_spoof_flags TEXT,
   UNIQUE (user_id, date)
 );
 
@@ -52,7 +69,11 @@ CREATE TABLE IF NOT EXISTS location_pings (
   accuracy      REAL,
   address       TEXT,
   captured_at   TEXT    NOT NULL,
-  source        TEXT    NOT NULL DEFAULT 'auto' CHECK (source IN ('auto','punch','manual'))
+  source        TEXT    NOT NULL DEFAULT 'auto' CHECK (source IN ('auto','punch','manual')),
+  distance_m    REAL,
+  inside        INTEGER,
+  spoof_score   INTEGER,
+  spoof_flags   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS leaves (
@@ -97,6 +118,18 @@ CREATE INDEX IF NOT EXISTS idx_pings_user_date ON location_pings(user_id, date);
   const add = (name, ddl) => { if (!cols.includes(name)) db.exec(`ALTER TABLE attendance ADD COLUMN ${name} ${ddl}`); };
   add('in_lat', 'REAL'); add('in_lng', 'REAL'); add('in_accuracy', 'REAL'); add('in_address', 'TEXT'); add('in_photo', 'TEXT');
   add('out_lat', 'REAL'); add('out_lng', 'REAL'); add('out_accuracy', 'REAL'); add('out_address', 'TEXT'); add('out_photo', 'TEXT');
+  add('in_site_id', 'INTEGER'); add('in_distance_m', 'REAL'); add('in_inside', 'INTEGER');
+  add('out_site_id', 'INTEGER'); add('out_distance_m', 'REAL'); add('out_inside', 'INTEGER');
+  add('in_spoof_score', 'INTEGER'); add('in_spoof_flags', 'TEXT');
+  add('out_spoof_score', 'INTEGER'); add('out_spoof_flags', 'TEXT');
+}
+{
+  const ucols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  if (!ucols.includes('site_id')) db.exec('ALTER TABLE users ADD COLUMN site_id INTEGER');
+  const pcols = db.prepare('PRAGMA table_info(location_pings)').all().map((c) => c.name);
+  for (const [n, t] of [['distance_m', 'REAL'], ['inside', 'INTEGER'], ['spoof_score', 'INTEGER'], ['spoof_flags', 'TEXT']]) {
+    if (!pcols.includes(n)) db.exec(`ALTER TABLE location_pings ADD COLUMN ${n} ${t}`);
+  }
 }
 
 /* ---------- small helpers used across routes ---------- */

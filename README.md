@@ -20,13 +20,38 @@ Node.js + Express + SQLite (`better-sqlite3`) on the backend, plain HTML/CSS/JS 
 - **Leave management** — apply for casual / sick / earned / loss-of-pay leave, see remaining balance, cancel a pending request.
 - **Regularization** — raise a request to correct a missed or wrong punch.
 
+### Geofencing (per showroom)
+- Admins manage **sites** (showrooms / hubs) with a map pin and an allowed radius; employees are assigned to a site, or left as **field staff** (no geofence).
+- Every punch is measured against that site: the distance is stored, and anything outside the radius is **flagged** in the roster, the employee's history and the payroll sheet.
+- The employee sees the verdict on the punch card — *"✓ inside Vutto Showroom — Noida (45 m)"* or *"⚠ 1.8 km from …"* — and gets a warning toast when they are outside.
+
+### Fake-GPS detection
+- A web page cannot read the OS mock-location flag, so this is **heuristic scoring** (0–100) with the reasons recorded, meant as a signal for a human — not proof.
+- Signals: reported accuracy of exactly 0 m, implausibly precise accuracy, a device clock that is far off the server, impossible travel between readings (>150 km/h), and identical coordinates across 5+ readings.
+- Anything scoring 50+ is marked **⚠ GPS <score>** on the punch, in the roster and in the payroll sheet. A native app can read Android's `isMock` flag directly — that is the reliable way.
+
+### Payroll export
+- **CSV and Excel (.xlsx)** for any month, from the admin Reports tab (or `GET /api/admin/payroll/export?format=csv|xlsx&month=YYYY-MM`).
+- Columns: employee code, name, department, site, present, half days, absent, paid leave, unpaid leave (LOP), **payable days**, worked hours, overtime hours, late marks, outside-geofence count, GPS-flag count.
+- The `.xlsx` is written by a small dependency-free writer (`src/xlsx.js`) that works in Node and the browser.
+
 ### Admin
-- **Team dashboard** — who is present, working now, absent or on leave today, with per-employee punch times, the **punch selfie** and the **check-in location** (a map link).
+- **Team dashboard** — who is present, working now, absent or on leave today, with per-employee punch times, the **punch selfie**, the **check-in location** (a map link) and the **site/GPS verdict**.
 - **Live locations** — a dedicated tab showing each employee's check-in location, last-seen time, latest tracked location and how many location updates were received that day.
 - **Employee IDs are generated automatically** — adding an employee assigns the next code (`VUT-0006`, `VUT-0007`, …); there is no field to fill in.
 - **Approvals** — approve/reject leave and regularization requests in one place, with a pending-count badge.
 - **Employee management** — add employees, promote/demote between User and Admin, activate/deactivate accounts.
 - **Monthly reports** — per-employee present / half / absent / leave days and total hours, with totals.
+
+### Sites API
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/admin/sites` | list sites with radius, map link and staff count |
+| POST | `/api/admin/sites` | `{ name, address, lat, lng, radius_m }` |
+| PATCH | `/api/admin/sites/:id` | update name/address/coords/radius/active |
+| DELETE | `/api/admin/sites/:id` | delete; its employees become field staff |
+| GET | `/api/admin/payroll?month=YYYY-MM` | payroll figures as JSON |
+| GET | `/api/admin/payroll/export?month=&format=csv\|xlsx` | download the payroll sheet |
 
 ### Where the location comes from
 

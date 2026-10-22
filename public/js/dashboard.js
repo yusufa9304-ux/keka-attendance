@@ -63,15 +63,24 @@ const locLine = (a, kind) => {
   const url = kind === 'in' ? a.in_map_url : a.out_map_url;
   const addr = (kind === 'in' ? a.in_address : a.out_address) || `${Number(lat).toFixed(5)}, ${Number(kind === 'in' ? a.in_lng : a.out_lng).toFixed(5)}`;
   const photo = kind === 'in' ? a.in_photo : a.out_photo;
+  const geo = kind === 'in' ? a.in_geofence : a.out_geofence;
+  const spoof = kind === 'in' ? a.in_spoof : a.out_spoof;
+  const geoBadge = geo
+    ? (geo.inside
+      ? `<span class="badge present">✓ inside ${esc(geo.site_name || 'site')} (${geo.distance_m >= 1000 ? (geo.distance_m / 1000).toFixed(1) + ' km' : geo.distance_m + ' m'})</span>`
+      : `<span class="badge absent">⚠ ${geo.distance_m >= 1000 ? (geo.distance_m / 1000).toFixed(1) + ' km' : geo.distance_m + ' m'} from ${esc(geo.site_name || 'site')}</span>`)
+    : '';
+  const spoofBadge = spoof && spoof.suspected ? `<span class="badge pending">GPS check ${spoof.score}/100</span>` : '';
   return `<div class="photo-row" style="justify-content:center;margin-top:10px">
       ${photo ? `<img class="punch-photo" src="${photo}" alt="${kind} photo" onclick="viewPhoto(this.src)" />` : ''}
       <span class="loc"><span class="pin">📍</span> <a href="${url}" target="_blank" rel="noopener">${esc(addr)}</a></span>
-    </div>`;
+    </div>
+    ${geoBadge || spoofBadge ? `<div style="margin-top:6px">${geoBadge} ${spoofBadge}</div>` : ''}`;
 };
 
 /* ---- today ---- */
 async function loadToday() {
-  const { attendance, pings, ping_interval_minutes } = await api('/attendance/today');
+  const { attendance, pings, ping_interval_minutes, site: attendanceSite } = await api('/attendance/today');
   PING_MIN = ping_interval_minutes || 10;
   const inEl = document.getElementById('today-in');
   const outEl = document.getElementById('today-out');
@@ -85,7 +94,9 @@ async function loadToday() {
   if (!attendance) {
     inEl.textContent = outEl.textContent = workedEl.textContent = '—';
     statusEl.innerHTML = '<span class="badge not_in">Not marked</span>';
-    locEl.innerHTML = '';
+    locEl.innerHTML = attendanceSite
+      ? `<div class="track-note" style="margin-top:14px">You are checked against <b>${esc(attendanceSite.name)}</b> — punch within ${attendanceSite.radius_m} m.</div>`
+      : '';
     btnIn.disabled = false; btnOut.disabled = true;
     noteEl.textContent = '📍 Location + a selfie are required for every punch.';
     stopTracking();
@@ -99,6 +110,9 @@ async function loadToday() {
   btnOut.disabled = !attendance.clock_in || !!attendance.clock_out;
 
   locEl.innerHTML = locLine(attendance, 'in') + (attendance.clock_out ? locLine(attendance, 'out') : '');
+  if (!attendance.clock_in && attendanceSite) {
+    locEl.innerHTML += `<div class="track-note" style="margin-top:14px">You are checked against <b>${esc(attendanceSite.name)}</b> — punch within ${attendanceSite.radius_m} m.</div>`;
+  }
 
   const onClock = !!attendance.clock_in && !attendance.clock_out;
   if (onClock) {
@@ -155,6 +169,22 @@ async function loadBalance() {
   document.getElementById('lv-hint').textContent = `You have ${b.remaining} days of paid leave remaining.`;
 }
 
+/* Geofence + GPS verdict for a history row. */
+const histSiteCell = (r) => {
+  const parts = [];
+  if (r.in_geofence) {
+    const g = r.in_geofence;
+    const d = g.distance_m >= 1000 ? `${(g.distance_m / 1000).toFixed(1)} km` : `${g.distance_m} m`;
+    parts.push(g.inside
+      ? `<span class="badge present">✓ at ${esc(g.site_name || 'site')} (${d})</span>`
+      : `<span class="badge absent">⚠ ${d} from ${esc(g.site_name || 'site')}</span>`);
+  } else {
+    parts.push('<span class="muted small">—</span>');
+  }
+  if (r.in_spoof?.suspected) parts.push(`<span class="badge pending">⚠ GPS ${r.in_spoof.score}</span>`);
+  return parts.join(' ');
+};
+
 /* ---- history ---- */
 async function loadHistory() {
   const from = document.getElementById('hist-from').value;
@@ -168,9 +198,9 @@ async function loadHistory() {
       <td>${fmtTime(r.clock_in)}${r.is_late ? ' <span class="badge half_day" style="font-size:.7rem">late</span>' : ''}</td>
       <td>${fmtTime(r.clock_out)}</td>
       <td class="num">${r.worked_minutes ? fmtHours(r.worked_minutes / 60) : '—'}</td>
-      <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>
-      <td class="small">${r.in_map_url ? `<a href="${r.in_map_url}" target="_blank" rel="noopener"><span class="pin">📍</span> ${esc(r.in_address || 'View map')}</a>` : '<span class="muted">—</span>'}</td>
-      <td><span class="badge ${r.status}">${label(r.status)}</span></td>
+      <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>        <td class="small">${r.in_map_url ? `<a href="${r.in_map_url}" target="_blank" rel="noopener"><span class="pin">📍</span> ${esc(r.in_address || 'View map')}</a>` : '<span class="muted">—</span>'}</td>
+        <td>${histSiteCell(r)}</td>
+        <td><span class="badge ${r.status}">${label(r.status)}</span></td>
     </tr>`).join('');
 }
 document.getElementById('hist-go').onclick = loadHistory;

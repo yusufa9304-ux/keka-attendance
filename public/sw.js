@@ -2,7 +2,7 @@
    NETWORK-FIRST for the static shell so deploys land immediately; the cache is
    only a fallback for offline. API calls are never cached. */
 
-const CACHE = 'vutto-attendance-app-v4';
+const CACHE = 'vutto-attendance-app-v6';
 const SHELL = [
   '/',
   '/dashboard.html',

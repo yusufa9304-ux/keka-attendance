@@ -9,7 +9,13 @@ const CAPTURE = (() => {
     return new Promise((resolve, reject) => {
       if (!('geolocation' in navigator)) return reject(new Error('This device does not support location.'));
       navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+        (p) => resolve({
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          accuracy: p.coords.accuracy,
+          // The device's own timestamp — a stale one is a mock-location tell.
+          ts: p.timestamp || Date.now(),
+        }),
         (err) => {
           const msg = err.code === 1
             ? 'Location permission is required to punch in/out. Please allow location access.'

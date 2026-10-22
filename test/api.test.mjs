@@ -16,7 +16,26 @@ function waitForServer(child) {
 
 function makeClient() {
   let cookie = '';
-  return (path, opts = {}) => new Promise((resolve, reject) => {
+  /** Raw GET (no JSON parsing) — for CSV / XLSX downloads. */
+  const rawGet = (path) => new Promise((resolve, reject) => {
+    const req = http.request({ host: HOST, port: PORT, path, method: 'GET', headers: cookie ? { Cookie: cookie } : {} }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        resolve({
+          status: res.statusCode,
+          contentType: res.headers['content-type'] || '',
+          body: buf.toString('utf8'),
+          b64: buf.toString('base64'),
+        });
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+
+  const client = (path, opts = {}) => new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : null;
     const req = http.request({
       host: HOST, port: PORT, path, method: opts.method || 'GET',
@@ -39,6 +58,8 @@ function makeClient() {
     if (payload) req.write(payload);
     req.end();
   });
+  client.raw = rawGet;
+  return client;
 }
 
 let pass = 0, fail = 0;
@@ -148,6 +169,8 @@ try {
   check('clock-in photo stored', typeof r.data.attendance?.in_photo === 'string' && r.data.attendance.in_photo.startsWith('data:image/'));
   check('clock-in address stored', r.data.attendance?.in_address === PROOF.address);
   check('clock-in map url built', typeof r.data.attendance?.in_map_url === 'string' && r.data.attendance.in_map_url.includes('maps'));
+  check('geofence evaluated — punch inside the showroom', r.data.geofence?.inside === true, JSON.stringify(r.data.geofence));
+  check('clean punch is not flagged as fake GPS', r.data.spoof?.suspected === false, JSON.stringify(r.data.spoof));
 
   r = await user('/api/attendance/clock-in', { method: 'POST', body: PROOF });
   check('double clock-in blocked', r.status === 409);
@@ -180,6 +203,58 @@ try {
   console.log('\n[user regularization]');
   r = await user('/api/attendance/regularize', { method: 'POST', body: { date: '2026-11-05', requested_clock_in: '2026-11-05T09:40:00', requested_clock_out: '2026-11-05T18:45:00', reason: 'Missed punch' } });
   check('regularize 201', r.status === 201, JSON.stringify(r.data));
+
+  console.log('\n[geofence + fake-GPS signals]');
+  // A brand-new employee assigned to a known showroom, so they have no punch today.
+  r = await admin('/api/admin/employees', { method: 'POST', body: { name: 'Geo Tester', email: 'geo@vutto.demo', password: 'Geo@123', department: 'Sales' } });
+  const geoId = r.data.employee.id;
+  const cpSite = (await admin('/api/admin/sites')).data.sites.find((s) => /Connaught/.test(s.name));
+  await admin('/api/admin/employees/' + geoId, { method: 'PATCH', body: { site_id: cpSite.id } });
+
+  const priya = makeClient();
+  await priya('/api/auth/login', { method: 'POST', body: { email: 'geo@vutto.demo', password: 'Geo@123' } });
+  r = await priya('/api/attendance/clock-in', {
+    method: 'POST',
+    body: { lat: 28.70, lng: 77.30, accuracy: 0, address: 'Somewhere else entirely', photo: PHOTO, ts: Date.now() - 3600_000 },
+  });
+  check('geofenced employee has a site on /today', (await priya('/api/attendance/today')).data.site?.name?.includes('Connaught'));
+  check('punch far from the assigned site is flagged outside', r.status === 200 && r.data.geofence?.inside === false, JSON.stringify(r.data.geofence));
+  check('mock-location fingerprint is scored', r.data.spoof?.suspected === true, JSON.stringify(r.data.spoof));
+  check('spoof reasons are recorded', Array.isArray(r.data.spoof?.flags) && r.data.spoof.flags.length >= 2, JSON.stringify(r.data.spoof?.flags));
+  check('outside-geofence distance returned', r.data.geofence?.distance_m > 1000, String(r.data.geofence?.distance_m));
+  r = await priya('/api/attendance/ping', { method: 'POST', body: { lat: 28.70, lng: 77.30, accuracy: 0 } });
+  check('ping also carries the geofence + spoof verdict', r.status === 200 && r.data.geofence && typeof r.data.spoof?.score === 'number');
+
+  console.log('\n[admin: sites]');
+  r = await admin('/api/admin/sites');
+  check('sites listed', r.status === 200 && r.data.sites.length >= 5, 'n=' + r.data.sites?.length);
+  check('sites expose a map link + employee count', r.data.sites.every((s) => s.map_url && typeof s.employees === 'number'));
+  r = await admin('/api/admin/sites', { method: 'POST', body: { name: 'Vutto Showroom — Test', address: 'Test Chowk', lat: 28.61, lng: 77.21, radius_m: 150 } });
+  check('site created', r.status === 201 && r.data.site.radius_m === 150, JSON.stringify(r.data).slice(0, 120));
+  const newSite = r.data.site.id;
+  r = await admin('/api/admin/sites/' + newSite, { method: 'PATCH', body: { radius_m: 500 } });
+  check('site radius updated', r.status === 200 && r.data.site.radius_m === 500);
+  r = await admin('/api/admin/sites', { method: 'POST', body: { name: 'Bad site' } });
+  check('site without coordinates rejected', r.status === 400);
+  r = await admin('/api/admin/employees/' + newId, { method: 'PATCH', body: { site_id: newSite } });
+  check('employee assigned to a site', r.status === 200 && r.data.employee.site_id === newSite, JSON.stringify(r.data.employee));
+  r = await admin('/api/admin/employees/' + newId, { method: 'PATCH', body: { site_id: 'field' } });
+  check('employee set back to field staff', r.status === 200 && r.data.employee.site_id === null);
+  r = await admin('/api/admin/sites/' + newSite, { method: 'DELETE' });
+  check('site deleted', r.status === 200);
+
+  console.log('\n[admin: payroll export]');
+  r = await admin('/api/admin/payroll');
+  check('payroll json 200', r.status === 200 && Array.isArray(r.data.records) && r.data.columns.length >= 12, 'cols=' + r.data.columns?.length);
+  const pr = r.data.records.find((x) => x.employee_code === 'VUT-0002');
+  check('payroll has payable days + hours', pr && typeof pr.payable_days === 'number' && typeof pr.worked_hours === 'number', JSON.stringify(pr));
+  check('payroll counts outside-geofence punches', typeof pr?.outside_geofence === 'number');
+  r = await admin.raw('/api/admin/payroll/export?format=csv');
+  check('payroll csv served', r.status === 200 && /text\/csv/.test(r.contentType || '') && /Employee Code/.test(r.body || ''), r.contentType);
+  check('csv has a row per employee', (r.body || '').split('\r\n').filter(Boolean).length >= 5);
+  r = await admin.raw('/api/admin/payroll/export?format=xlsx');
+  check('payroll xlsx served', r.status === 200 && /spreadsheetml/.test(r.contentType || ''), r.contentType);
+  check('xlsx looks like a zip (PK header)', (r.b64 || '').slice(0, 4) === 'UEsD', (r.b64 || '').slice(0, 8));
 
   console.log('\n[logout]');
   r = await user('/api/auth/logout', { method: 'POST' });

@@ -13,8 +13,8 @@ import { db, todayStr, addDays, isWeekend } from './db.js';
 
 export function runSeed({ reset = false, quiet = false } = {}) {
   if (reset) {
-    db.exec('DELETE FROM location_pings; DELETE FROM regularizations; DELETE FROM leaves; DELETE FROM attendance; DELETE FROM users;');
-    db.exec("DELETE FROM sqlite_sequence WHERE name IN ('users','attendance','leaves','regularizations','location_pings');");
+    db.exec('DELETE FROM location_pings; DELETE FROM regularizations; DELETE FROM leaves; DELETE FROM attendance; DELETE FROM users; DELETE FROM sites;');
+    db.exec("DELETE FROM sqlite_sequence WHERE name IN ('users','attendance','leaves','regularizations','location_pings','sites');");
   }
 
   const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
@@ -25,17 +25,28 @@ export function runSeed({ reset = false, quiet = false } = {}) {
 
   const hash = (pw) => bcrypt.hashSync(pw, 10);
 
+  // Vutto showrooms — the geofences employees are checked against.
+  const siteList = [
+    { name: 'Vutto Showroom — Connaught Place', address: 'Connaught Place, New Delhi', lat: 28.6139, lng: 77.2090, radius_m: 250 },
+    { name: 'Vutto Showroom — Noida', address: 'Sector 62, Noida', lat: 28.5355, lng: 77.3910, radius_m: 300 },
+    { name: 'Vutto Showroom — Gurugram', address: 'Sector 29, Gurugram', lat: 28.4595, lng: 77.0266, radius_m: 300 },
+    { name: 'Vutto Hub — Ghaziabad', address: 'Vaishali, Ghaziabad', lat: 28.6692, lng: 77.4538, radius_m: 200 },
+    { name: 'Vutto Yard — Dwarka', address: 'Dwarka, New Delhi', lat: 28.5921, lng: 77.0460, radius_m: 400 },
+  ];
+  const insertSite = db.prepare('INSERT INTO sites (name, address, lat, lng, radius_m) VALUES (@name, @address, @lat, @lng, @radius_m)');
+  const siteIds = siteList.map((s) => insertSite.run(s).lastInsertRowid);
+
   const insertUser = db.prepare(`
-    INSERT INTO users (name, email, password_hash, role, department, employee_code, leave_balance)
-    VALUES (@name, @email, @password_hash, @role, @department, @employee_code, @leave_balance)
+    INSERT INTO users (name, email, password_hash, role, department, employee_code, leave_balance, site_id)
+    VALUES (@name, @email, @password_hash, @role, @department, @employee_code, @leave_balance, @site_id)
   `);
 
   const seedUsers = [
-    { name: 'Yusuf Admin',   email: 'admin@vutto.demo',  password: 'Admin@123', role: 'admin', department: 'HR',        employee_code: 'VUT-0001', leave_balance: 18 },
-    { name: 'Aarav Sharma',  email: 'aarav@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Engineering', employee_code: 'VUT-0002', leave_balance: 14 },
-    { name: 'Priya Nair',    email: 'priya@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Design',      employee_code: 'VUT-0003', leave_balance: 16 },
-    { name: 'Rahul Verma',   email: 'rahul@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Sales',       employee_code: 'VUT-0004', leave_balance: 12 },
-    { name: 'Sneha Iyer',    email: 'sneha@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Engineering', employee_code: 'VUT-0005', leave_balance: 18 },
+    { name: 'Yusuf Admin',   email: 'admin@vutto.demo',  password: 'Admin@123', role: 'admin', department: 'HR',        employee_code: 'VUT-0001', leave_balance: 18, site_id: siteIds[0] },
+    { name: 'Aarav Sharma',  email: 'aarav@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Sales',       employee_code: 'VUT-0002', leave_balance: 14, site_id: siteIds[0] },
+    { name: 'Priya Nair',    email: 'priya@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Sales',       employee_code: 'VUT-0003', leave_balance: 16, site_id: siteIds[1] },
+    { name: 'Rahul Verma',   email: 'rahul@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Field Sales', employee_code: 'VUT-0004', leave_balance: 12, site_id: null }, // field staff: no geofence
+    { name: 'Sneha Iyer',    email: 'sneha@vutto.demo',  password: 'User@123',  role: 'user',  department: 'Refurb',      employee_code: 'VUT-0005', leave_balance: 18, site_id: siteIds[2] },
   ];
 
   const ids = {};
@@ -56,21 +67,25 @@ export function runSeed({ reset = false, quiet = false } = {}) {
     ];
     const insertAtt = db.prepare(`
       INSERT OR IGNORE INTO attendance
-        (user_id, date, clock_in, clock_out, status, worked_minutes, note, in_lat, in_lng, in_address)
+        (user_id, date, clock_in, clock_out, status, worked_minutes, note, in_lat, in_lng, in_address,
+         in_site_id, in_distance_m, in_inside, in_spoof_score, in_spoof_flags)
       VALUES
-        (@user_id, @date, @clock_in, @clock_out, @status, @worked_minutes, @note, @in_lat, @in_lng, @in_address)
+        (@user_id, @date, @clock_in, @clock_out, @status, @worked_minutes, @note, @in_lat, @in_lng, @in_address,
+         @in_site_id, @in_distance_m, @in_inside, @in_spoof_score, @in_spoof_flags)
     `);
     const employees = seedUsers.filter((u) => u.role === 'user');
     const today = todayStr();
+    let dayIdx = -1; // counts working days only, so demo flags never land on a weekend
     for (let back = 14; back >= 0; back--) {
       const date = addDays(today, -back);
       if (isWeekend(date)) continue;
+      dayIdx++;
       for (const [i, e] of employees.entries()) {
         const uid = ids[e.email];
         const absent = back === 6 && i === 2;
         const half = back === 3 && i === 1;
         if (absent) {
-          insertAtt.run({ user_id: uid, date, clock_in: null, clock_out: null, status: 'absent', worked_minutes: 0, note: 'No show', in_lat: null, in_lng: null, in_address: null });
+          insertAtt.run({ user_id: uid, date, clock_in: null, clock_out: null, status: 'absent', worked_minutes: 0, note: 'No show', in_lat: null, in_lng: null, in_address: null, in_site_id: null, in_distance_m: null, in_inside: null, in_spoof_score: 0, in_spoof_flags: '[]' });
           continue;
         }
         const isToday = back === 0;
@@ -83,6 +98,12 @@ export function runSeed({ reset = false, quiet = false } = {}) {
         const clockOut = isToday ? null : `${date}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`;
         const worked = isToday ? 0 : (outH * 60 + outM) - (inH * 60 + inM);
         const site = SITES[i % SITES.length];
+        // Demo flavour: one day a punch lands outside the geofence, and one day
+        // carries a mock-location fingerprint, so the admin view has examples.
+        const offsite = dayIdx === 6 && i === 1;
+        const spoofed = dayIdx === 9 && i === 2;
+        const inDistance = offsite ? 1840 : 30 + ((i * 17) % 90);
+        const inInside = e.site_id == null ? null : (offsite ? 0 : 1);
         insertAtt.run({
           user_id: uid,
           date,
@@ -94,6 +115,11 @@ export function runSeed({ reset = false, quiet = false } = {}) {
           in_lat: site.lat,
           in_lng: site.lng,
           in_address: site.address,
+          in_site_id: e.site_id || null,
+          in_distance_m: e.site_id == null ? null : inDistance,
+          in_inside: inInside,
+          in_spoof_score: spoofed ? 70 : 0,
+          in_spoof_flags: spoofed ? JSON.stringify(['reported accuracy of 0 m (typical of mock providers)', 'identical coordinates across 5+ readings']) : '[]',
         });
         // A short location trail for today's punches (every ~10 min).
         if (isToday) {

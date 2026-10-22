@@ -27,9 +27,70 @@ document.querySelectorAll('.tabs button').forEach((b) => {
   };
 });
 
+let SITES = [];
+
 async function refreshAll() {
-  await Promise.all([loadDashboard(), loadLocations(), loadLeaves(), loadRegs(), loadEmployees(), loadReport()]);
+  await Promise.all([loadDashboard(), loadLocations(), loadLeaves(), loadRegs(), loadReport()]);
+  await loadSites();      // populates SITES
+  await loadEmployees();  // uses SITES for the pickers
 }
+
+/* ---- sites (geofences) ---- */
+async function loadSites() {
+  const { sites } = await api('/admin/sites');
+  SITES = sites;
+  const body = document.getElementById('sites-body');
+  if (body) {
+    body.innerHTML = sites.map((s) => `<tr>
+      <td><b>${esc(s.name)}</b><div class="muted small">${esc(s.address || '')}</div></td>
+      <td class="num">${s.radius_m} m</td>
+      <td><a href="${s.map_url}" target="_blank" rel="noopener" class="small">📍 map</a></td>
+      <td class="num">${s.employees}</td>
+      <td>${s.active ? '<span class="badge active">Active</span>' : '<span class="badge inactive">Inactive</span>'}</td>
+      <td><button class="btn sm ghost" data-site-toggle="${s.id}" data-val="${s.active ? 0 : 1}">${s.active ? 'Deactivate' : 'Activate'}</button>
+      <button class="btn sm ghost" data-site-del="${s.id}">Delete</button></td></tr>`).join('');
+    body.querySelectorAll('[data-site-toggle]').forEach((el) => (el.onclick = () => patchSite(Number(el.dataset.siteToggle), { active: el.dataset.val === '1' })));
+    body.querySelectorAll('[data-site-del]').forEach((el) => (el.onclick = () => deleteSite(Number(el.dataset.siteDel))));
+  }
+  const opts = '<option value="field">Field (no site)</option>' + sites.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  const es = document.getElementById('e-site');
+  if (es) es.innerHTML = opts;
+}
+
+const siteOptions = (selected) => '<option value="field"' + (selected == null ? ' selected' : '') + '>Field (no site)</option>'
+  + SITES.map((s) => `<option value="${s.id}"${selected === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+
+async function patchSite(id, patch) {
+  try { await api('/admin/sites/' + id, { method: 'PATCH', body: patch }); toast('Site updated'); await refreshAll(); }
+  catch (err) { toast(err.message, true); }
+}
+async function deleteSite(id) {
+  if (!window.confirm('Delete this site? Its employees become field staff.')) return;
+  try { await api('/admin/sites/' + id, { method: 'DELETE' }); toast('Site deleted'); await refreshAll(); }
+  catch (err) { toast(err.message, true); }
+}
+window.openAddSite = () => {
+  openModal(`<h2>Add site</h2>
+    <p class="small muted">Tip: open the showroom in Google Maps, long-press the pin and copy the coordinates.</p>
+    <div class="field"><label>Name</label><input id="s-name" placeholder="Vutto Showroom — Jaipur" /></div>
+    <div class="field"><label>Address</label><input id="s-addr" placeholder="Tonk Road, Jaipur" /></div>
+    <div class="row2"><div class="field"><label>Latitude</label><input id="s-lat" placeholder="26.8467" /></div>
+    <div class="field"><label>Longitude</label><input id="s-lng" placeholder="75.8020" /></div></div>
+    <div class="field"><label>Allowed radius (metres)</label><input id="s-rad" type="number" value="250" /></div>
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="s-save">Create</button></div>`);
+  document.getElementById('s-save').onclick = async () => {
+    try {
+      await api('/admin/sites', { method: 'POST', body: {
+        name: document.getElementById('s-name').value.trim(),
+        address: document.getElementById('s-addr').value.trim(),
+        lat: document.getElementById('s-lat').value,
+        lng: document.getElementById('s-lng').value,
+        radius_m: document.getElementById('s-rad').value,
+      } });
+      toast('Site added'); closeModal(); await refreshAll();
+    } catch (err) { toast(err.message, true); }
+  };
+};
 
 /* ---- photo viewer ---- */
 window.viewPhoto = (src) => {
@@ -53,6 +114,17 @@ const photoCell = (src) => (src
 const locCell = (lat, lng, address, mapUrl) => (lat != null
   ? `<a href="${mapUrl}" target="_blank" rel="noopener" class="small"><span class="pin">📍</span> ${esc(address || `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`)}</a>`
   : '<span class="muted small">—</span>');
+
+/** Geofence verdict + fake-GPS flag for one roster row. */
+const siteCell = (t) => {
+  const parts = [];
+  if (!t.site_name || t.site_name === 'Field') parts.push('<span class="muted small">Field (no site)</span>');
+  else if (t.in_inside === 0) parts.push(`<span class="badge absent">⚠ outside ${esc(t.site_name)}</span>`);
+  else if (t.in_inside === 1) parts.push(`<span class="badge present">✓ at ${esc(t.site_name)}</span>`);
+  else parts.push(`<span class="muted small">${esc(t.site_name)}</span>`);
+  if ((t.spoof_score || 0) >= 50) parts.push(`<span class="badge pending">⚠ GPS ${t.spoof_score}</span>`);
+  return parts.join(' ');
+};
 
 /* ---- dashboard ---- */
 async function loadDashboard() {
@@ -99,6 +171,7 @@ async function loadDashboard() {
       <td class="num">${t.worked_minutes ? fmtHours(t.worked_minutes / 60) : '—'}</td>
       <td>${photoCell(t.in_photo)}</td>
       <td>${locCell(t.in_lat, t.in_lng, t.in_address, t.in_map_url)}</td>
+      <td>${siteCell(t)}</td>
       <td><span class="badge ${t.state}">${label(t.state)}</span></td>
     </tr>`).join('');
 }
@@ -195,6 +268,7 @@ async function loadEmployees() {
       <td class="muted small">${esc(e.email)}</td>
       <td class="muted small">${esc(e.employee_code || '—')}</td>
       <td>${esc(e.department || '—')}</td>
+      <td>${e.role === 'admin' ? '<span class="muted small">—</span>' : `<select data-site-set="${e.id}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;max-width:190px">${siteOptions(e.site_id)}</select>`}</td>
       <td><span class="badge ${e.role === 'admin' ? 'role-admin' : 'present'}">${label(e.role)}</span></td>
       <td class="num">${e.leave_balance}</td>
       <td><span class="badge ${e.status}">${label(e.status)}</span></td>
@@ -203,6 +277,14 @@ async function loadEmployees() {
         <button class="btn sm ghost" onclick="toggleStatus(${e.id}, '${e.status === 'active' ? 'inactive' : 'active'}')">${e.status === 'active' ? 'Deactivate' : 'Activate'}</button>
       </td>
     </tr>`).join('');
+  body.querySelectorAll('[data-site-set]').forEach((el) => (el.onchange = () => patchEmployeeSite(Number(el.dataset.siteSet), el.value)));
+}
+
+async function patchEmployeeSite(id, value) {
+  try {
+    await api('/admin/employees/' + id, { method: 'PATCH', body: { site_id: value === 'field' ? null : Number(value) } });
+    toast('Site updated'); await refreshAll();
+  } catch (err) { toast(err.message, true); }
 }
 
 window.toggleRole = async (id, role) => {
@@ -213,6 +295,15 @@ window.toggleStatus = async (id, status) => {
   try { await api('/admin/employees/' + id, { method: 'PATCH', body: { status } }); toast('Status updated'); await loadEmployees(); }
   catch (err) { toast(err.message, true); }
 };
+
+/* ---- sites + payroll export wiring ---- */
+document.getElementById('add-site')?.addEventListener('click', () => window.openAddSite());
+document.getElementById('export-csv')?.addEventListener('click', () => {
+  window.location.href = `/api/admin/payroll/export?format=csv&month=${encodeURIComponent(document.getElementById('rep-month').value || '')}`;
+});
+document.getElementById('export-xlsx')?.addEventListener('click', () => {
+  window.location.href = `/api/admin/payroll/export?format=xlsx&month=${encodeURIComponent(document.getElementById('rep-month').value || '')}`;
+});
 
 /* ---- add employee ---- */
 window.openAdd = () => document.getElementById('modal').classList.add('open');
@@ -226,6 +317,7 @@ document.getElementById('e-save').onclick = async () => {
     department: document.getElementById('e-dept').value.trim() || null,
     role: document.getElementById('e-role').value,
     leave_balance: Number(document.getElementById('e-bal').value) || 18,
+    site_id: (function () { const v = document.getElementById('e-site').value; return v === 'field' ? null : Number(v); })(),
   };
   if (!body.name || !body.email || !body.password) return toast('Name, email and password are required', true);
   try {

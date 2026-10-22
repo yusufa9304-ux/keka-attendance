@@ -2,6 +2,9 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import { db, todayStr, dateRange, isWeekend, nextEmployeeCode, PING_INTERVAL_MINUTES } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { payrollMatrix, PAYROLL_COLUMNS } from '../payroll.js';
+import { buildXlsx, buildCsv } from '../xlsx.js';
+import { parseFlags } from '../spoof.js';
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -15,11 +18,14 @@ router.get('/dashboard', (_req, res) => {
   const totalEmployees = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'active'").get().n;
 
   const rows = db.prepare(`
-    SELECT u.id, u.name, u.email, u.department, u.employee_code,
+    SELECT u.id, u.name, u.email, u.department, u.employee_code, u.site_id, s.name AS site_name,
            a.clock_in, a.clock_out, a.status, a.worked_minutes,
            a.in_lat, a.in_lng, a.in_address, a.in_photo,
-           a.out_lat, a.out_lng, a.out_address, a.out_photo
+           a.out_lat, a.out_lng, a.out_address, a.out_photo,
+           a.in_inside, a.in_distance_m, a.in_spoof_score, a.in_spoof_flags,
+           a.out_inside, a.out_distance_m, a.out_spoof_score, a.out_spoof_flags
     FROM users u
+    LEFT JOIN sites s ON s.id = u.site_id
     LEFT JOIN attendance a ON a.user_id = u.id AND a.date = ?
     WHERE u.status = 'active' AND u.role = 'user'
     ORDER BY u.name
@@ -48,6 +54,13 @@ router.get('/dashboard', (_req, res) => {
       last_address: lp ? lp.address : null,
       last_map_url: lp ? mapsUrl(lp.lat, lp.lng) : null,
       pending_regularizations: 0,
+      site_name: r.site_name || 'Field',
+      in_inside: r.in_inside, in_distance_m: r.in_distance_m,
+      out_inside: r.out_inside, out_distance_m: r.out_distance_m,
+      spoof_score: Math.max(r.in_spoof_score || 0, r.out_spoof_score || 0),
+      spoof_flags: [...new Set([...parseFlags(r.in_spoof_flags), ...parseFlags(r.out_spoof_flags)])],
+      flagged: (r.in_spoof_score || 0) >= 50 || (r.out_spoof_score || 0) >= 50,
+      outside: r.in_inside === 0 || r.out_inside === 0,
     };
   });
 
@@ -131,7 +144,100 @@ router.patch('/employees/:id', (req, res) => {
     name ?? null, role ?? null, department ?? null, employee_code ?? null,
     status ?? null, leave_balance ?? null, password ? bcrypt.hashSync(password, 10) : null, id,
   );
+
+  // Site assignment: a number assigns a showroom, null/'field' means field staff.
+  if ('site_id' in (req.body || {})) {
+    const raw = req.body.site_id;
+    const siteId = raw === null || raw === '' || raw === 'field' ? null : Number(raw);
+    if (siteId !== null && !db.prepare('SELECT 1 FROM sites WHERE id = ?').get(siteId)) {
+      return res.status(400).json({ error: 'Unknown site' });
+    }
+    db.prepare('UPDATE users SET site_id = ? WHERE id = ?').run(siteId, id);
+  }
+
   res.json({ employee: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(id)) });
+});
+
+/* ----------------------------- Sites (geofences) ----------------------------- */
+
+function siteRow(s) {
+  return {
+    ...s,
+    active: !!s.active,
+    map_url: mapsUrl(s.lat, s.lng),
+    employees: db.prepare('SELECT COUNT(*) AS n FROM users WHERE site_id = ? AND role = \'user\'').get(s.id).n,
+  };
+}
+
+router.get('/sites', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM sites ORDER BY name').all();
+  res.json({ sites: rows.map(siteRow) });
+});
+
+router.post('/sites', (req, res) => {
+  const { name, address, lat, lng, radius_m } = req.body || {};
+  const la = Number(lat), ln = Number(lng);
+  if (!name) return res.status(400).json({ error: 'A name is required' });
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return res.status(400).json({ error: 'Latitude and longitude are required' });
+  const r = Number.isFinite(Number(radius_m)) && Number(radius_m) > 0 ? Math.round(Number(radius_m)) : 250;
+  const info = db.prepare(`
+    INSERT INTO sites (name, address, lat, lng, radius_m) VALUES (?, ?, ?, ?, ?)
+  `).run(name, address || null, la, ln, r);
+  res.status(201).json({ site: siteRow(db.prepare('SELECT * FROM sites WHERE id = ?').get(info.lastInsertRowid)) });
+});
+
+router.patch('/sites/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Site not found' });
+  const { name, address, lat, lng, radius_m, active } = req.body || {};
+  db.prepare(`
+    UPDATE sites SET
+      name = COALESCE(?, name), address = COALESCE(?, address),
+      lat = COALESCE(?, lat), lng = COALESCE(?, lng),
+      radius_m = COALESCE(?, radius_m), active = COALESCE(?, active)
+    WHERE id = ?
+  `).run(name ?? null, address ?? null,
+    Number.isFinite(Number(lat)) ? Number(lat) : null,
+    Number.isFinite(Number(lng)) ? Number(lng) : null,
+    Number.isFinite(Number(radius_m)) ? Math.round(Number(radius_m)) : null,
+    active === undefined ? null : (active ? 1 : 0), id);
+  res.json({ site: siteRow(db.prepare('SELECT * FROM sites WHERE id = ?').get(id)) });
+});
+
+router.delete('/sites/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!db.prepare('SELECT 1 FROM sites WHERE id = ?').get(id)) return res.status(404).json({ error: 'Site not found' });
+  db.prepare('UPDATE users SET site_id = NULL WHERE site_id = ?').run(id);
+  db.prepare('DELETE FROM sites WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+/* ----------------------------- Payroll ----------------------------- */
+
+router.get('/payroll', (req, res) => {
+  const month = req.query.month || todayStr().slice(0, 7);
+  const { columns, records } = payrollMatrix(month);
+  res.json({ month, columns, records });
+});
+
+router.get('/payroll/export', (req, res) => {
+  const month = req.query.month || todayStr().slice(0, 7);
+  const format = (req.query.format || 'csv').toLowerCase();
+  const { columns, rows } = payrollMatrix(month);
+  const matrix = [columns, ...rows];
+  const file = `vutto-payroll-${month}`;
+
+  if (format === 'xlsx' || format === 'excel') {
+    const bytes = buildXlsx(`Payroll ${month}`, matrix);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${file}.xlsx"`);
+    return res.end(Buffer.from(bytes));
+  }
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${file}.csv"`);
+  res.end(buildCsv(matrix));
 });
 
 /* ----------------------------- Attendance ----------------------------- */

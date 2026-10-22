@@ -9,7 +9,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/css/style.css?v=4" />
+  <link rel="stylesheet" href="/css/style.css?v=6" />
 </head>
 <body>
   <nav class="nav">
@@ -19,6 +19,7 @@
       <button data-tab="locations">Locations</button>
       <button data-tab="approvals">Approvals <span id="appr-dot" class="badge pending" style="display:none">0</span></button>
       <button data-tab="employees">Employees</button>
+      <button data-tab="sites">Sites</button>
       <button data-tab="reports">Reports</button>
     </div>
     <div class="spacer"></div>
@@ -55,8 +56,8 @@
       <div class="card">
         <h2>Team status — today</h2>
         <table>
-          <thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>State</th></tr></thead>
-          <tbody id="team-body"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>Site / GPS</th><th>State</th></tr></thead>
+          <tbody id="team-body"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -105,8 +106,23 @@
           <button class="btn primary sm" onclick="openAdd()">+ Add employee</button>
         </div>
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
-          <tbody id="emp-body"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Site</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
+          <tbody id="emp-body"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ SITES ============ -->
+    <section data-panel="sites" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+          <h2>Showrooms &amp; geofences</h2>
+          <button class="btn primary sm" id="add-site">+ Add site</button>
+        </div>
+        <p class="small muted">Every punch is checked against the employee's assigned site. Field staff have no site and are not geofenced.</p>
+        <table>
+          <thead><tr><th>Site</th><th class="num">Radius</th><th>Map</th><th class="num">Staff</th><th>Status</th><th></th></tr></thead>
+          <tbody id="sites-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -116,8 +132,13 @@
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
           <h2>Monthly summary</h2>
-          <input type="month" id="rep-month" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px" />
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="month" id="rep-month" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px" />
+            <button class="btn sm" id="export-csv">⬇ CSV</button>
+            <button class="btn sm primary" id="export-xlsx">⬇ Excel</button>
+          </div>
         </div>
+        <p class="small muted">Payroll-ready sheet — present days, LOP, payable days, hours, overtime, late marks, geofence violations and GPS flags.</p>
         <table>
           <thead><tr><th>Employee</th><th>Department</th><th class="num">Present</th><th class="num">Half</th><th class="num">Absent</th><th class="num">Leave</th><th class="num">Hours</th></tr></thead>
           <tbody id="rep-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
@@ -141,6 +162,7 @@
         <div class="field"><label>Role</label><select id="e-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
         <div class="field"><label>Leave balance (days)</label><input id="e-bal" type="number" value="18" /></div>
       </div>
+      <div class="field"><label>Site (geofence)</label><select id="e-site"><option value="field">Field (no site)</option></select></div>
       <div class="foot">
         <button class="btn ghost" onclick="closeModal()">Cancel</button>
         <button class="btn primary" id="e-save">Create</button>
@@ -148,7 +170,7 @@
     </div>
   </div>
 
-  <script src="/js/api.js?v=4"></script>
-  <script src="/js/admin.js?v=4"></script>
+  <script src="/js/api.js?v=6"></script>
+  <script src="/js/admin.js?v=6"></script>
 </body>
 </html>

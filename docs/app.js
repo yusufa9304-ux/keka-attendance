@@ -14,13 +14,20 @@ const workingDays = (a, b) => dateRange(a, b).filter((d) => !isWeekend(d)).lengt
 
 function seed() {
   const users = [];
-  const mk = (name, email, password, role, department, code, bal) =>
-    users.push({ id: users.length + 1, name, email, password, role, department, employee_code: code, status: 'active', leave_balance: bal });
-  mk('Yusuf Admin', 'admin@vutto.demo', 'Admin@123', 'admin', 'HR', 'VUT-0001', 18);
-  mk('Aarav Sharma', 'aarav@vutto.demo', 'User@123', 'user', 'Engineering', 'VUT-0002', 14);
-  mk('Priya Nair', 'priya@vutto.demo', 'User@123', 'user', 'Design', 'VUT-0003', 16);
-  mk('Rahul Verma', 'rahul@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0004', 12);
-  mk('Sneha Iyer', 'sneha@vutto.demo', 'User@123', 'user', 'Engineering', 'VUT-0005', 18);
+  const sites = [
+    { id: 1, name: 'Vutto Showroom — Connaught Place', address: 'Connaught Place, New Delhi', lat: 28.6139, lng: 77.2090, radius_m: 250, active: true },
+    { id: 2, name: 'Vutto Showroom — Noida', address: 'Sector 62, Noida', lat: 28.5355, lng: 77.3910, radius_m: 300, active: true },
+    { id: 3, name: 'Vutto Showroom — Gurugram', address: 'Sector 29, Gurugram', lat: 28.4595, lng: 77.0266, radius_m: 300, active: true },
+    { id: 4, name: 'Vutto Hub — Ghaziabad', address: 'Vaishali, Ghaziabad', lat: 28.6692, lng: 77.4538, radius_m: 200, active: true },
+    { id: 5, name: 'Vutto Yard — Dwarka', address: 'Dwarka, New Delhi', lat: 28.5921, lng: 77.0460, radius_m: 400, active: true },
+  ];
+  const mk = (name, email, password, role, department, code, bal, siteId) =>
+    users.push({ id: users.length + 1, name, email, password, role, department, employee_code: code, status: 'active', leave_balance: bal, site_id: siteId ?? null });
+  mk('Yusuf Admin', 'admin@vutto.demo', 'Admin@123', 'admin', 'HR', 'VUT-0001', 18, 1);
+  mk('Aarav Sharma', 'aarav@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0002', 14, 1);
+  mk('Priya Nair', 'priya@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0003', 16, 2);
+  mk('Rahul Verma', 'rahul@vutto.demo', 'User@123', 'user', 'Field Sales', 'VUT-0004', 12, null);
+  mk('Sneha Iyer', 'sneha@vutto.demo', 'User@123', 'user', 'Refurb', 'VUT-0005', 18, 3);
 
   const SITES = [
     { lat: 28.6139, lng: 77.2090, address: 'Connaught Place, New Delhi' },
@@ -34,9 +41,11 @@ function seed() {
   let aid = 1;
   const today = todayStr();
   const emps = users.filter((u) => u.role === 'user');
+  let dayIdx = -1;
   for (let back = 14; back >= 0; back--) {
     const date = addDays(today, -back);
     if (isWeekend(date)) continue;
+    dayIdx++;
     emps.forEach((e, i) => {
       const absent = back === 6 && i === 2;
       const half = back === 3 && i === 1;
@@ -49,11 +58,19 @@ function seed() {
       const cout = isToday ? null : `${date}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`;
       const worked = isToday ? 0 : (outH * 60 + outM) - (inH * 60 + inM);
       const site = SITES[i % SITES.length];
+      const siteObj = e.site_id ? sites.find((s) => s.id === e.site_id) : null;
+      const offsite = dayIdx === 6 && i === 1;
+      const spoofed = dayIdx === 9 && i === 2;
       attendance.push({
         id: aid++, user_id: e.id, date, clock_in: cin, clock_out: cout,
         status: isToday ? 'present' : (half ? 'half_day' : 'present'), worked_minutes: worked, note: null,
         in_lat: site.lat, in_lng: site.lng, in_address: site.address, in_photo: null,
         out_lat: null, out_lng: null, out_address: null, out_photo: null,
+        in_site_id: siteObj ? siteObj.id : null,
+        in_distance_m: siteObj ? (offsite ? 1840 : 30 + ((i * 17) % 90)) : null,
+        in_inside: siteObj ? (offsite ? false : true) : null,
+        in_spoof_score: spoofed ? 70 : 0,
+        in_spoof_flags: spoofed ? ['reported accuracy of 0 m (typical of mock providers)', 'identical coordinates across 5+ readings'] : [],
       });
       if (isToday) {
         for (let k = 1; k <= 3; k++) {
@@ -77,7 +94,7 @@ function seed() {
     { id: 1, user_id: 4, date: addDays(today, -2), requested_clock_in: `${addDays(today, -2)}T09:35:00`, requested_clock_out: `${addDays(today, -2)}T18:40:00`, reason: 'Forgot to clock out, was on client call', status: 'pending', reviewed_at: null },
   ];
 
-  return { users, attendance, leaves, regularizations, location_pings, session: null, seq: { u: 6, a: aid, l: 3, r: 2, p: pid } };
+  return { users, sites, attendance, leaves, regularizations, location_pings, session: null, seq: { u: 6, a: aid, l: 3, r: 2, p: pid, s: 6 } };
 }
 
 function load() {
@@ -87,7 +104,9 @@ function load() {
 function persist(st = DB) { try { localStorage.setItem(LS_KEY, JSON.stringify(st)); } catch {} }
 let DB = load();
 DB.location_pings ||= [];
+DB.sites ||= [];
 DB.seq = DB.seq || {};
+DB.seq.s ||= (DB.sites.length + 1);
 DB.seq.p ||= (DB.location_pings.length + 1);
 
 /* Safety net: a demo must never end up with no active admin, or nobody could
@@ -132,11 +151,32 @@ function toast(msg, isErr = false) {
 const todayRow = (uid) => DB.attendance.find((a) => a.user_id === uid && a.date === todayStr());
 const workedHours = (r) => (r && r.worked_minutes ? +(r.worked_minutes / 60).toFixed(2) : 0);
 
-function addPing(u, date, pos, source = 'auto', at = new Date().toISOString()) {
+/* ---- geofence + fake-GPS helpers (same logic as the server) ---- */
+const siteForUser = (u) => (u && u.site_id ? DB.sites.find((s) => s.id === u.site_id && s.active !== false) || null : null);
+const recentPings = (uid, date = todayStr(), limit = 6) => DB.location_pings
+  .filter((p) => p.user_id === uid && p.date === date)
+  .sort((a, b) => String(b.captured_at).localeCompare(String(a.captured_at)))
+  .slice(0, limit);
+
+function judge(u, pos) {
+  const geo = VUTTO_GEO.evaluateGeofence(siteForUser(u), pos.lat, pos.lng);
+  const spoof = VUTTO_GEO.scoreSpoof({
+    lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy,
+    clientTs: pos.ts, prev: recentPings(u.id), now: Date.now(),
+  });
+  return { geo, spoof };
+}
+
+function addPing(u, date, pos, source = 'auto', at = new Date().toISOString(), verdict = null) {
+  const { geo, spoof } = verdict || judge(u, pos);
   DB.location_pings.push({
     id: DB.seq.p++, user_id: u.id, date,
     lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy ?? null,
     address: pos.address || null, captured_at: at, source,
+    distance_m: geo ? geo.distance_m : null,
+    inside: geo ? geo.inside : null,
+    spoof_score: spoof.score,
+    spoof_flags: spoof.flags,
   });
 }
 
@@ -146,33 +186,58 @@ async function doPunch(kind) {
     const proof = await CAPTURE.punchProof((msg) => toast(msg));
     const now = new Date().toISOString();
     const date = todayStr();
+    const { geo, spoof } = judge(u, proof);
+
     if (kind === 'in') {
       let r = todayRow(u.id);
       if (r && r.clock_in) { toast('You have already clocked in today', true); return render(); }
+      const geoFields = {
+        in_site_id: geo ? geo.site_id : null,
+        in_distance_m: geo ? geo.distance_m : null,
+        in_inside: geo ? geo.inside : null,
+        in_spoof_score: spoof.score,
+        in_spoof_flags: spoof.flags,
+      };
       if (!r) {
         DB.attendance.push({
           id: DB.seq.a++, user_id: u.id, date, clock_in: now, clock_out: null,
           status: 'present', worked_minutes: 0, note: null,
           in_lat: proof.lat, in_lng: proof.lng, in_address: proof.address, in_photo: proof.photo,
           out_lat: null, out_lng: null, out_address: null, out_photo: null,
+          ...geoFields,
         });
       } else {
-        r.clock_in = now; r.status = 'present'; r.note = null;
-        r.in_lat = proof.lat; r.in_lng = proof.lng; r.in_address = proof.address; r.in_photo = proof.photo;
+        Object.assign(r, {
+          clock_in: now, status: 'present', note: null,
+          in_lat: proof.lat, in_lng: proof.lng, in_address: proof.address, in_photo: proof.photo,
+          ...geoFields,
+        });
       }
-      addPing(u, date, proof, 'punch', now);
+      addPing(u, date, proof, 'punch', now, { geo, spoof });
       toast('Clocked in — photo + location saved');
     } else {
       const r = todayRow(u.id);
       if (!r || !r.clock_in) { toast('You need to clock in first', true); return render(); }
       if (r.clock_out) { toast('You have already clocked out today', true); return render(); }
-      r.clock_out = now;
-      r.worked_minutes = Math.max(0, Math.round((new Date(now) - new Date(r.clock_in)) / 60000));
+      Object.assign(r, {
+        clock_out: now,
+        worked_minutes: Math.max(0, Math.round((new Date(now) - new Date(r.clock_in)) / 60000)),
+        status: null, // set just below
+        out_lat: proof.lat, out_lng: proof.lng, out_address: proof.address, out_photo: proof.photo,
+        out_site_id: geo ? geo.site_id : null,
+        out_distance_m: geo ? geo.distance_m : null,
+        out_inside: geo ? geo.inside : null,
+        out_spoof_score: spoof.score,
+        out_spoof_flags: spoof.flags,
+      });
       r.status = r.worked_minutes < WORK.halfDay ? 'half_day' : 'present';
-      r.out_lat = proof.lat; r.out_lng = proof.lng; r.out_address = proof.address; r.out_photo = proof.photo;
-      addPing(u, date, proof, 'punch', now);
+      addPing(u, date, proof, 'punch', now, { geo, spoof });
       toast('Clocked out — photo + location saved');
     }
+
+    if (geo && !geo.inside) toast(VUTTO_GEO.describeGeofence(geo), true);
+    else if (spoof.suspected) toast('Heads up: your location looked unusual — this punch is flagged for review.', true);
+
     persist(); render();
   } catch (err) {
     toast(err.message, true);
@@ -195,6 +260,19 @@ function stopTracking() { if (tracker) { tracker.stop(); tracker = null; } }
 
 const mapsUrl = (lat, lng) => (lat != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);
 const fmtCoords = (lat, lng) => `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+
+/** "at <site>" / "outside <site>" / "Field" plus any GPS flag, for one attendance row. */
+function siteCell(a) {
+  if (!a) return '<span class="muted small">—</span>';
+  const s = DB.sites.find((x) => x.id === a.in_site_id);
+  const parts = [];
+  if (a.in_site_id == null) parts.push('<span class="muted small">Field (no site)</span>');
+  else if (a.in_inside === false) parts.push(`<span class="badge absent">⚠ outside ${esc(s ? s.name : 'site')}</span>`);
+  else parts.push(`<span class="badge present">✓ at ${esc(s ? s.name : 'site')}</span>`);
+  const score = Math.max(a.in_spoof_score || 0, a.out_spoof_score || 0);
+  if (score >= 50) parts.push(`<span class="badge pending">⚠ GPS ${score}</span>`);
+  return parts.join(' ');
+}
 
 window.viewPhoto = (src) => {
   let m = document.getElementById('photo-modal');
@@ -292,6 +370,7 @@ function addEmployee(body) {
     id: DB.seq.u++, name: body.name, email: body.email, password: body.password,
     role: body.role || 'user', department: body.department || null,
     employee_code: nextEmployeeCode(), status: 'active', leave_balance: body.leave_balance ?? 18,
+    site_id: body.site_id ?? null,
   });
   persist(); toast('Employee created'); closeModal(); render();
 }
@@ -358,6 +437,22 @@ function renderUser() {
       <span class="loc"><span class="pin">📍</span> <a href="${mapsUrl(lat, lng)}" target="_blank" rel="noopener">${esc(addr)}</a></span>
     </div>`;
   };
+  const geoBadge = (r, kind) => {
+    const inside = kind === 'in' ? r.in_inside : r.out_inside;
+    const dist = kind === 'in' ? r.in_distance_m : r.out_distance_m;
+    const sid = kind === 'in' ? r.in_site_id : r.out_site_id;
+    if (dist == null) return '';
+    const s = DB.sites.find((x) => x.id === sid);
+    const name = s ? s.name : 'assigned site';
+    const d = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
+    return inside
+      ? `<span class="badge present">✓ inside ${esc(name)} (${d})</span>`
+      : `<span class="badge absent">⚠ ${d} from ${esc(name)}</span>`;
+  };
+  const spoofBadge = (r, kind) => {
+    const score = (kind === 'in' ? r.in_spoof_score : r.out_spoof_score) || 0;
+    return score >= 50 ? `<span class="badge pending">GPS check ${score}/100</span>` : '';
+  };
   const clockPanel = `
     <div class="card clock">
       <div class="now" id="live-clock">--:--:--</div>
@@ -374,6 +469,9 @@ function renderUser() {
       </div>
       ${t ? punchLoc(t, 'in') : ''}
       ${t && t.clock_out ? punchLoc(t, 'out') : ''}
+      ${t && t.in_distance_m != null ? `<div style="margin-top:10px">${geoBadge(t, 'in')} ${spoofBadge(t, 'in')}</div>` : ''}
+      ${t && t.out_distance_m != null ? `<div style="margin-top:6px">${geoBadge(t, 'out')} ${spoofBadge(t, 'out')}</div>` : ''}
+      ${!t && siteForUser(u) ? `<div class="track-note" style="margin-top:14px">You are checked against <b>${esc(siteForUser(u).name)}</b> — punch within ${siteForUser(u).radius_m} m.</div>` : ''}
       <div class="track-note">${onClock
         ? `📍 On the clock — location updates every ${PING_MIN} min (${pingsToday} update${pingsToday === 1 ? '' : 's'} so far today).`
         : `📍 Location + a selfie are required for every punch. ${pingsToday ? pingsToday + ' location update(s) recorded today.' : ''}`}</div>
@@ -405,7 +503,7 @@ function renderUser() {
         <label class="small muted">To</label><input type="date" id="hist-to" value="${ui.histTo}" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px" />
         <button class="btn sm" id="hist-go">Apply</button>
       </div></div>
-      <div class="card"><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>Status</th></tr></thead>
+      <div class="card"><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>Site / GPS</th><th>Status</th></tr></thead>
       <tbody>${recs.length ? recs.map((r) => `<tr>
         <td>${fmtDate(r.date)}</td>
         <td>${fmtTime(r.clock_in)}${r.clock_in && r.clock_in.slice(11, 16) > WORK.start ? ' <span class="badge half_day" style="font-size:.7rem">late</span>' : ''}</td>
@@ -413,7 +511,8 @@ function renderUser() {
         <td class="num">${r.worked_minutes ? fmtHours(r.worked_minutes / 60) : '—'}</td>
         <td>${r.in_photo ? `<img class="punch-photo" src="${r.in_photo}" alt="in" onclick="viewPhoto(this.src)" />` : '<span class="muted small">—</span>'}</td>
         <td class="small">${r.in_lat != null ? `<a href="${mapsUrl(r.in_lat, r.in_lng)}" target="_blank" rel="noopener"><span class="pin">📍</span> ${esc(r.in_address || fmtCoords(r.in_lat, r.in_lng))}</a>` : '<span class="muted">—</span>'}</td>
-        <td><span class="badge ${r.status}">${label(r.status)}</span></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No records in this range.</td></tr>'}</tbody></table></div>`;
+        <td>${siteCell(r)}</td>
+        <td><span class="badge ${r.status}">${label(r.status)}</span></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No records in this range.</td></tr>'}</tbody></table></div>`;
   } else if (ui.tab === 'leave') {
     const mine = DB.leaves.filter((l) => l.user_id === u.id).sort((a, b) => b.id - a.id);
     panel = `<div class="page-head"><h1>Leaves</h1></div>
@@ -465,14 +564,14 @@ function renderUser() {
 
 function renderAdmin() {
   const u = me();
-  if (!ui.tab || !['team', 'locations', 'approvals', 'employees', 'reports'].includes(ui.tab)) ui.tab = 'team';
+  if (!ui.tab || !['team', 'locations', 'approvals', 'employees', 'sites', 'reports'].includes(ui.tab)) ui.tab = 'team';
   if (!ui.atab) ui.atab = 'leaves';
   const pendingLeaves = DB.leaves.filter((l) => l.status === 'pending').length;
   const pendingRegs = DB.regularizations.filter((r) => r.status === 'pending').length;
   const pending = pendingLeaves + pendingRegs;
   const pendingRegByUser = {};
   for (const r of DB.regularizations) if (r.status === 'pending') pendingRegByUser[r.user_id] = (pendingRegByUser[r.user_id] || 0) + 1;
-  const tabs = [['team', 'Team Today'], ['locations', 'Locations'], ['approvals', `Approvals ${pending ? `<span class="badge pending">${pending}</span>` : ''}`], ['employees', 'Employees'], ['reports', 'Reports']];
+  const tabs = [['team', 'Team Today'], ['locations', 'Locations'], ['approvals', `Approvals ${pending ? `<span class="badge pending">${pending}</span>` : ''}`], ['employees', 'Employees'], ['sites', 'Sites'], ['reports', 'Reports']];
   document.getElementById('nav-links').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}</button>`).join('');
 
   const date = todayStr();
@@ -519,17 +618,21 @@ function renderAdmin() {
   const photoCell = (src) => (src
     ? `<img class="punch-photo" src="${src}" alt="punch photo" onclick="viewPhoto(this.src)" />`
     : '<span class="muted small">—</span>');
-
+  const siteSelect = (e) => `<select data-site-set="${e.id}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;max-width:190px">
+      <option value="field"${e.site_id == null ? ' selected' : ''}>Field (no site)</option>
+      ${DB.sites.map((s) => `<option value="${s.id}"${e.site_id === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
+    </select>`;
   if (ui.tab === 'team') {
     panel = `<div class="card"><h2>Team status — today</h2>
-      <table><thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>State</th></tr></thead>
+      <table><thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>Site / GPS</th><th>State</th></tr></thead>
       <tbody>${team.length ? team.map(({ e, a, state }) => `<tr>
         <td><b>${esc(e.name)}</b>${pendingRegByUser[e.id] ? ` <span class="badge pending" title="pending regularization">${pendingRegByUser[e.id]} pending</span>` : ''}<div class="muted small">${esc(e.employee_code || '')}</div></td>
         <td>${esc(e.department || '—')}</td><td>${fmtTime(a && a.clock_in)}</td><td>${fmtTime(a && a.clock_out)}</td>
         <td class="num">${a && a.worked_minutes ? fmtHours(a.worked_minutes / 60) : '—'}</td>
         <td>${photoCell(a && a.in_photo)}</td>
         <td>${locCell(a && a.in_lat, a && a.in_lng, a && a.in_address)}</td>
-        <td><span class="badge ${state}">${label(state)}</span></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No employees yet.</td></tr>'}</tbody></table></div>`;
+        <td>${siteCell(a)}</td>
+        <td><span class="badge ${state}">${label(state)}</span></td></tr>`).join('') : '<tr><td colspan="9" class="empty">No employees yet.</td></tr>'}</tbody></table></div>`;
   } else if (ui.tab === 'locations') {
     const rows = team.map(({ e, a }) => {
       const list = DB.location_pings.filter((p) => p.user_id === e.id && p.date === date)
@@ -542,7 +645,7 @@ function renderAdmin() {
         <h2>Live locations</h2><span class="ping-count">${date} · updates every ${PING_MIN} min</span></div>
       <table><thead><tr><th>Employee</th><th>On clock</th><th>Check-in location</th><th>Last seen</th><th>Latest location</th><th class="num">Updates</th></tr></thead>
       <tbody>${rows.map(({ e, a, latest, count, onClock }) => `<tr>
-        <td><b>${esc(e.name)}</b><div class="muted small">${esc(e.employee_code || '')}</div></td>
+        <td><b>${esc(e.name)}</b>${siteCell(a)}<div class="muted small">${esc(e.employee_code || '')}</div></td>
         <td>${onClock ? '<span class="badge working">On clock</span>' : (a && a.clock_out ? '<span class="badge done">Clocked out</span>' : '<span class="badge not_in">Not in</span>')}</td>
         <td>${locCell(a && a.in_lat, a && a.in_lng, a && a.in_address)}</td>
         <td class="small">${latest ? fmtTime(latest.captured_at) : '<span class="muted">—</span>'}</td>
@@ -579,16 +682,37 @@ function renderAdmin() {
     panel = `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2>Employees</h2>
         <button class="btn primary sm" id="add-emp">+ Add employee</button></div>
-      <table><thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Site</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
       <tbody>${DB.users.slice().sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'admin' ? -1 : 1)).map((e) => `<tr>
         <td><b>${esc(e.name)}</b></td><td class="muted small">${esc(e.email)}</td><td class="muted small">${esc(e.employee_code || '—')}</td>
         <td>${esc(e.department || '—')}</td>
+        <td>${siteSelect(e)}</td>
         <td><span class="badge ${e.role === 'admin' ? 'role-admin' : 'present'}">${label(e.role)}</span></td>
         <td class="num">${e.leave_balance}</td><td><span class="badge ${e.status}">${label(e.status)}</span></td>
         <td>${e.id === me().id
           ? '<span class="muted small">This is you</span>'
           : `<button class="btn sm ghost" data-role="${e.id}" data-val="${e.role === 'admin' ? 'user' : 'admin'}">${e.role === 'admin' ? 'Make user' : 'Make admin'}</button>
         <button class="btn sm ghost" data-status="${e.id}" data-val="${e.status === 'active' ? 'inactive' : 'active'}">${e.status === 'active' ? 'Deactivate' : 'Activate'}</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+  } else if (ui.tab === 'sites') {
+    panel = `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+        <h2>Showrooms &amp; geofences</h2>
+        <button class="btn primary sm" id="add-site">+ Add site</button>
+      </div>
+      <p class="small muted">Every punch is checked against the employee's assigned site. Field staff have no site and are not geofenced.</p>
+      <table><thead><tr><th>Site</th><th class="num">Radius</th><th>Map</th><th class="num">Staff</th><th>Status</th><th></th></tr></thead>
+      <tbody>${DB.sites.map((s) => {
+        const staff = DB.users.filter((x) => x.site_id === s.id && x.role === 'user');
+        return `<tr>
+          <td><b>${esc(s.name)}</b><div class="muted small">${esc(s.address || '')}</div></td>
+          <td class="num">${s.radius_m} m</td>
+          <td>${s.lat != null ? `<a href="${mapsUrl(s.lat, s.lng)}" target="_blank" rel="noopener" class="small">📍 map</a>` : '—'}</td>
+          <td class="num">${staff.length}</td>
+          <td>${s.active === false ? '<span class="badge inactive">Inactive</span>' : '<span class="badge active">Active</span>'}</td>
+          <td><button class="btn sm ghost" data-site-toggle="${s.id}">${s.active === false ? 'Activate' : 'Deactivate'}</button>
+          <button class="btn sm ghost" data-site-del="${s.id}">Delete</button></td></tr>`;
+      }).join('')}</tbody></table>
+    </div>`;
   } else {
     const month = ui.repMonth;
     const recs = DB.users.filter((x) => x.role === 'user').map((e) => {
@@ -597,8 +721,13 @@ function renderAdmin() {
     });
     const totals = recs.reduce((a, r) => ({ present: a.present + r.present, absent: a.absent + r.absent, hours: +(a.hours + r.hours).toFixed(2) }), { present: 0, absent: 0, hours: 0 });
     panel = `<div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2>Monthly summary</h2>
-        <input type="month" id="rep-month" value="${month}" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px" /></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap"><h2>Monthly summary</h2>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="month" id="rep-month" value="${month}" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px" />
+          <button class="btn sm" id="export-csv">⬇ CSV</button>
+          <button class="btn sm primary" id="export-xlsx">⬇ Excel</button>
+        </div></div>
+      <p class="small muted">Payroll-ready sheet — present days, LOP, payable days, hours, overtime, late marks, geofence violations and GPS flags.</p>
       <table><thead><tr><th>Employee</th><th>Department</th><th class="num">Present</th><th class="num">Half</th><th class="num">Absent</th><th class="num">Leave</th><th class="num">Hours</th></tr></thead>
       <tbody>${recs.map((r) => `<tr><td><b>${esc(r.e.name)}</b><div class="muted small">${esc(r.e.employee_code || '')}</div></td>
         <td>${esc(r.e.department || '—')}</td><td class="num">${r.present}</td><td class="num">${r.half}</td><td class="num">${r.absent}</td><td class="num">${r.leave}</td><td class="num">${r.hours}</td></tr>`).join('')}
@@ -633,8 +762,122 @@ function bindUser() {
   mainEl().querySelectorAll('[data-cancel]').forEach((el) => (el.onclick = () => cancelLeave(Number(el.dataset.cancel))));
 }
 
+/* ---- payroll (mirrors src/payroll.js) ---- */
+const PAYROLL_COLUMNS = ['Employee Code', 'Employee', 'Department', 'Site',
+  'Present', 'Half days', 'Absent', 'Paid leave', 'Unpaid leave (LOP)',
+  'Payable days', 'Worked hours', 'Overtime hours', 'Late marks',
+  'Outside geofence', 'GPS flags'];
+
+function payrollRows(month) {
+  const unpaid = {};
+  for (const l of DB.leaves) {
+    if (l.status !== 'approved' || l.type !== 'unpaid') continue;
+    if (l.start_date > month + '-31' || l.end_date < month + '-01') continue;
+    const days = dateRange(l.start_date, l.end_date).filter((d) => d.startsWith(month) && !isWeekend(d)).length;
+    unpaid[l.user_id] = (unpaid[l.user_id] || 0) + days;
+  }
+  return DB.users.filter((u) => u.role === 'user').map((u) => {
+    const rows = DB.attendance.filter((a) => a.user_id === u.id && a.date.startsWith(month));
+    const n = (f) => rows.filter(f).length;
+    const present = n((r) => r.status === 'present');
+    const half = n((r) => r.status === 'half_day');
+    const absent = n((r) => r.status === 'absent');
+    const onLeave = n((r) => r.status === 'on_leave');
+    const lop = unpaid[u.id] || 0;
+    const paidLeave = Math.max(0, onLeave - lop);
+    const totalMin = rows.reduce((a, r) => a + (r.worked_minutes || 0), 0);
+    const otMin = rows.reduce((a, r) => a + Math.max(0, (r.worked_minutes || 0) - 480), 0);
+    const site = DB.sites.find((s) => s.id === u.site_id);
+    return {
+      code: u.employee_code || '', name: u.name, dept: u.department || '', site: site ? site.name : 'Field',
+      present, half, absent, paidLeave, lop,
+      payable: +(present + half * 0.5 + paidLeave).toFixed(1),
+      hours: +(totalMin / 60).toFixed(2), ot: +(otMin / 60).toFixed(2),
+      late: n((r) => r.clock_in && r.clock_in.slice(11, 16) > '09:30'),
+      outside: n((r) => r.in_inside === false || r.out_inside === false),
+      flagged: n((r) => (r.in_spoof_score || 0) >= 50 || (r.out_spoof_score || 0) >= 50),
+    };
+  });
+}
+
+function payrollMatrix(month) {
+  return [PAYROLL_COLUMNS, ...payrollRows(month).map((r) => [
+    r.code, r.name, r.dept, r.site, r.present, r.half, r.absent, r.paidLeave, r.lop,
+    r.payable, r.hours, r.ot, r.late, r.outside, r.flagged,
+  ])];
+}
+
+function downloadBytes(bytes, filename, type) {
+  const blob = new Blob([bytes], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/* ---- sites ---- */
+function toggleSite(id) {
+  const s = DB.sites.find((x) => x.id === id);
+  if (!s) return;
+  s.active = s.active === false;
+  persist(); toast(s.active === false ? 'Site deactivated' : 'Site activated'); render();
+}
+function deleteSite(id) {
+  if (!window.confirm('Delete this site? Its employees become field staff.')) return;
+  DB.sites = DB.sites.filter((s) => s.id !== id);
+  for (const u of DB.users) if (u.site_id === id) u.site_id = null;
+  persist(); toast('Site deleted'); render();
+}
+function addSite(body) {
+  if (!body.name) return toast('A name is required', true);
+  const lat = Number(body.lat), lng = Number(body.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return toast('Latitude and longitude are required', true);
+  DB.sites.push({
+    id: DB.seq.s++, name: body.name, address: body.address || null,
+    lat, lng, radius_m: Number(body.radius_m) || 250, active: true,
+  });
+  persist(); toast('Site added'); closeModal(); render();
+}
+function openAddSite() {
+  openModal(`<h2>Add site</h2>
+    <p class="small muted">Tip: open the showroom in Google Maps, long-press the pin and copy the coordinates.</p>
+    <div class="field"><label>Name</label><input id="s-name" placeholder="Vutto Showroom — Jaipur" /></div>
+    <div class="field"><label>Address</label><input id="s-addr" placeholder="Tonk Road, Jaipur" /></div>
+    <div class="row2">
+      <div class="field"><label>Latitude</label><input id="s-lat" placeholder="26.8467" /></div>
+      <div class="field"><label>Longitude</label><input id="s-lng" placeholder="75.8020" /></div>
+    </div>
+    <div class="field"><label>Allowed radius (metres)</label><input id="s-rad" type="number" value="250" /></div>
+    <div class="foot"><button class="btn ghost" id="s-cancel">Cancel</button><button class="btn primary" id="s-save">Create</button></div>`);
+  document.getElementById('s-cancel').onclick = closeModal;
+  document.getElementById('s-save').onclick = () => addSite({
+    name: document.getElementById('s-name').value.trim(),
+    address: document.getElementById('s-addr').value.trim(),
+    lat: document.getElementById('s-lat').value,
+    lng: document.getElementById('s-lng').value,
+    radius_m: document.getElementById('s-rad').value,
+  });
+}
+
 function bindAdmin() {
   const r = document.getElementById('refresh'); if (r) r.onclick = () => { toast('Refreshed'); render(); };
+  const ec = document.getElementById('export-csv');
+  if (ec) ec.onclick = () => {
+    downloadBytes(VUTTO_XLSX.buildCsv(payrollMatrix(ui.repMonth)), `vutto-payroll-${ui.repMonth}.csv`, 'text/csv;charset=utf-8');
+    toast('Payroll CSV downloaded');
+  };
+  const ex = document.getElementById('export-xlsx');
+  if (ex) ex.onclick = () => {
+    downloadBytes(VUTTO_XLSX.buildXlsx(`Payroll ${ui.repMonth}`, payrollMatrix(ui.repMonth)),
+      `vutto-payroll-${ui.repMonth}.xlsx`,
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    toast('Payroll Excel downloaded');
+  };
+  const as = document.getElementById('add-site'); if (as) as.onclick = openAddSite;
+  mainEl().querySelectorAll('[data-site-toggle]').forEach((el) => (el.onclick = () => toggleSite(Number(el.dataset.siteToggle))));
+  mainEl().querySelectorAll('[data-site-del]').forEach((el) => (el.onclick = () => deleteSite(Number(el.dataset.siteDel))));
+  mainEl().querySelectorAll('[data-site-set]').forEach((el) => (el.onchange = () => patchEmployee(Number(el.dataset.siteSet), { site_id: el.value === 'field' ? null : Number(el.value) })));
   mainEl().querySelectorAll('[data-goto]').forEach((el) => (el.onclick = () => {
     ui.tab = 'approvals'; ui.atab = el.dataset.goto; render();
   }));
@@ -658,6 +901,7 @@ function openAdd() {
     <div class="field"><label>Department</label><input id="e-dept" placeholder="Engineering" /></div></div>
     <div class="row2"><div class="field"><label>Role</label><select id="e-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
     <div class="field"><label>Leave balance (days)</label><input id="e-bal" type="number" value="18" /></div></div>
+    <div class="field"><label>Site (geofence)</label><select id="e-site"><option value="field">Field (no site)</option>${DB.sites.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></div>
     <div class="foot"><button class="btn ghost" id="e-cancel">Cancel</button><button class="btn primary" id="e-save">Create</button></div>`);
   document.getElementById('e-cancel').onclick = closeModal;
   document.getElementById('e-save').onclick = () => addEmployee({
@@ -667,6 +911,7 @@ function openAdd() {
     department: document.getElementById('e-dept').value.trim() || null,
     role: document.getElementById('e-role').value,
     leave_balance: Number(document.getElementById('e-bal').value) || 18,
+    site_id: (function () { const v = document.getElementById('e-site').value; return v === 'field' ? null : Number(v); })(),
   });
 }
 
