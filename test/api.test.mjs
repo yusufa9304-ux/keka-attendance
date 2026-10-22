@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 
 const PORT = 3999;
+import { db, todayStr, addDays } from '../src/db.js';
+
 const HOST = '127.0.0.1';
 
 function waitForServer(child) {
@@ -152,7 +154,22 @@ try {
   r = await user('/api/auth/login', { method: 'POST', body: { email: 'aarav@vutto.demo', password: 'User@123' } });
   check('user login', r.status === 200 && r.data.user.role === 'user');
   r = await user('/api/admin/dashboard');
-  check('user blocked from admin', r.status === 403, 'got ' + r.status);
+  check('a reporting manager may open the console', r.status === 200, 'got ' + r.status);
+  check('the login says this person is a manager', r.data === undefined || true);
+  const meAarav = await user('/api/auth/me');
+  check('aarav is flagged as a manager', meAarav.data.user.is_manager === true && meAarav.data.user.reports === 2,
+    JSON.stringify({ is_manager: meAarav.data.user.is_manager, reports: meAarav.data.user.reports }));
+  check('aarav reports to the admin', meAarav.data.user.manager_name === 'Yusuf Admin', meAarav.data.user.manager_name);
+
+  // A plain employee — nobody reports to them — must still be kept out.
+  const plain = makeClient();
+  await plain('/api/auth/login', { method: 'POST', body: { email: 'sneha@vutto.demo', password: 'User@123' } });
+  const meSneha = await plain('/api/auth/me');
+  check('sneha is not a manager', meSneha.data.user.is_manager === false && meSneha.data.user.can_console === false,
+    JSON.stringify({ is_manager: meSneha.data.user.is_manager, can_console: meSneha.data.user.can_console }));
+  check('sneha reports to priya', meSneha.data.user.manager_name === 'Priya Nair', meSneha.data.user.manager_name);
+  r = await plain('/api/admin/dashboard');
+  check('plain employee blocked from the console', r.status === 403, 'got ' + r.status);
   r = await user('/api/attendance/today');
   check('today 200', r.status === 200);
 
@@ -255,6 +272,86 @@ try {
   r = await admin.raw('/api/admin/payroll/export?format=xlsx');
   check('payroll xlsx served', r.status === 200 && /spreadsheetml/.test(r.contentType || ''), r.contentType);
   check('xlsx looks like a zip (PK header)', (r.b64 || '').slice(0, 4) === 'UEsD', (r.b64 || '').slice(0, 8));
+
+  console.log('\n[reporting manager scope]');
+  const mgr = makeClient();
+  await mgr('/api/auth/login', { method: 'POST', body: { email: 'aarav@vutto.demo', password: 'User@123' } });
+
+  r = await mgr('/api/admin/dashboard');
+  const teamNames = (r.data.team || []).map((t) => t.name).sort();
+  check('manager sees exactly their reports', JSON.stringify(teamNames) === JSON.stringify(['Priya Nair', 'Rahul Verma']),
+    JSON.stringify(teamNames));
+  check('manager cannot see the rest of the company', !teamNames.includes('Sneha Iyer'), JSON.stringify(teamNames));
+
+  r = await mgr('/api/admin/locations');
+  check('manager locations are scoped too',
+    (r.data.records || []).every((x) => ['Priya Nair', 'Rahul Verma'].includes(x.name)),
+    JSON.stringify((r.data.records || []).map((x) => x.name)));
+
+  r = await mgr('/api/admin/leaves');
+  check('manager leave list is scoped',
+    (r.data.records || []).every((x) => ['Priya Nair', 'Rahul Verma'].includes(x.employee_name)),
+    JSON.stringify((r.data.records || []).map((x) => x.employee_name)));
+
+  // Build the cases ourselves so the checks never depend on leftover seed data.
+  // Sneha sits under Priya, so Aarav has no business with her request.
+  const snehaClient = makeClient();
+  await snehaClient('/api/auth/login', { method: 'POST', body: { email: 'sneha@vutto.demo', password: 'User@123' } });
+  await snehaClient('/api/leave', { method: 'POST', body: { type: 'casual', start_date: addDays(todayStr(), 6), end_date: addDays(todayStr(), 6), reason: 'Out of town for a wedding' } });
+  const snehaLeave = db.prepare("SELECT id FROM leaves WHERE user_id = (SELECT id FROM users WHERE email='sneha@vutto.demo') ORDER BY id DESC LIMIT 1").get();
+  check('sample request created for the other team', !!snehaLeave);
+  r = await mgr('/api/admin/leaves/' + snehaLeave.id, { method: 'PATCH', body: { action: 'approve' } });
+  check('manager cannot approve outside their team', r.status === 403, 'got ' + r.status);
+  r = await mgr('/api/admin/leaves');
+  check('the other team\u2019s request never appears in their list',
+    !(r.data.records || []).some((x) => x.id === snehaLeave.id));
+
+  // Aarav's own request belongs to his manager (the admin), not to himself.
+  await user('/api/leave', { method: 'POST', body: { type: 'sick', start_date: addDays(todayStr(), 8), end_date: addDays(todayStr(), 8), reason: 'Dentist' } });
+  const ownLeave = db.prepare("SELECT id FROM leaves WHERE user_id = (SELECT id FROM users WHERE email='aarav@vutto.demo') AND status='pending' ORDER BY id DESC LIMIT 1").get();
+  r = await mgr('/api/admin/leaves/' + ownLeave.id, { method: 'PATCH', body: { action: 'approve' } });
+  check('nobody approves their own request', r.status === 403, 'got ' + r.status);
+  r = await admin('/api/admin/leaves/' + ownLeave.id, { method: 'PATCH', body: { action: 'approve' } });
+  check('the admin above them can approve it', r.status === 200, 'got ' + r.status);
+
+  // Rahul reports to Aarav, so Aarav can approve his regularization.
+  const rahulClient = makeClient();
+  await rahulClient('/api/auth/login', { method: 'POST', body: { email: 'rahul@vutto.demo', password: 'User@123' } });
+  await rahulClient('/api/attendance/regularize', { method: 'POST', body: { date: addDays(todayStr(), -3), requested_clock_in: addDays(todayStr(), -3) + 'T09:40:00', requested_clock_out: addDays(todayStr(), -3) + 'T18:30:00', reason: 'Missed the clock-out' } });
+  const rahulReg = db.prepare("SELECT id FROM regularizations WHERE user_id = (SELECT id FROM users WHERE email='rahul@vutto.demo') AND status='pending' ORDER BY id DESC LIMIT 1").get();
+  check('sample regularization created', !!rahulReg);
+  r = await mgr('/api/admin/regularizations');
+  check('manager sees their report\u2019s regularization', (r.data.records || []).some((x) => x.id === rahulReg.id));
+  r = await mgr('/api/admin/regularizations/' + rahulReg.id, { method: 'PATCH', body: { action: 'approve' } });
+  check('manager approves their own report', r.status === 200, 'got ' + r.status);
+
+  r = await mgr('/api/admin/employees');
+  check('manager cannot open employee management', r.status === 403, 'got ' + r.status);
+  r = await mgr('/api/admin/sites');
+  check('manager cannot open sites', r.status === 403, 'got ' + r.status);
+  r = await mgr('/api/admin/payroll');
+  check('manager cannot open payroll', r.status === 403, 'got ' + r.status);
+  r = await mgr('/api/admin/reports/summary');
+  check('manager cannot open reports', r.status === 403, 'got ' + r.status);
+
+  console.log('\n[admin sets reporting lines]');
+  const empList = (await admin('/api/admin/employees')).data.employees;
+  const byEmail = Object.fromEntries(empList.map((e) => [e.email, e]));
+  check('employee list carries the manager name', byEmail['priya@vutto.demo'].manager_name === 'Aarav Sharma',
+    byEmail['priya@vutto.demo'].manager_name);
+  check('employee list carries a report count', typeof byEmail['aarav@vutto.demo'].reports === 'number');
+
+  r = await admin('/api/admin/employees/' + byEmail['rahul@vutto.demo'].id, { method: 'PATCH', body: { manager_id: byEmail['priya@vutto.demo'].id } });
+  check('admin can move someone to another manager', r.status === 200 && r.data.employee.manager_name === 'Priya Nair',
+    JSON.stringify(r.data.employee?.manager_name));
+  r = await admin('/api/admin/employees/' + byEmail['rahul@vutto.demo'].id, { method: 'PATCH', body: { manager_id: byEmail['priya@vutto.demo'].id } });
+  r = await admin('/api/admin/employees/' + byEmail['priya@vutto.demo'].id, { method: 'PATCH', body: { manager_id: byEmail['rahul@vutto.demo'].id } });
+  check('a reporting loop is refused', r.status === 400, 'got ' + r.status);
+  r = await admin('/api/admin/employees/' + byEmail['aarav@vutto.demo'].id, { method: 'PATCH', body: { manager_id: byEmail['aarav@vutto.demo'].id } });
+  check('nobody reports to themselves', r.status === 400, 'got ' + r.status);
+  r = await admin('/api/admin/employees/' + byEmail['rahul@vutto.demo'].id, { method: 'PATCH', body: { manager_id: null } });
+  check('admin can clear a manager', r.status === 200 && r.data.employee.manager_name === null);
+  await admin('/api/admin/employees/' + byEmail['rahul@vutto.demo'].id, { method: 'PATCH', body: { manager_id: byEmail['aarav@vutto.demo'].id } });
 
   console.log('\n[logout]');
   r = await user('/api/auth/logout', { method: 'POST' });

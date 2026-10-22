@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS users (
   employee_code  TEXT,
   status         TEXT    NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
   leave_balance  REAL    NOT NULL DEFAULT 18,
+  -- who this person reports to; anyone who has reports is a reporting manager
+  manager_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -126,6 +128,7 @@ CREATE INDEX IF NOT EXISTS idx_pings_user_date ON location_pings(user_id, date);
 {
   const ucols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
   if (!ucols.includes('site_id')) db.exec('ALTER TABLE users ADD COLUMN site_id INTEGER');
+  if (!ucols.includes('manager_id')) db.exec('ALTER TABLE users ADD COLUMN manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
   const pcols = db.prepare('PRAGMA table_info(location_pings)').all().map((c) => c.name);
   for (const [n, t] of [['distance_m', 'REAL'], ['inside', 'INTEGER'], ['spoof_score', 'INTEGER'], ['spoof_flags', 'TEXT']]) {
     if (!pcols.includes(n)) db.exec(`ALTER TABLE location_pings ADD COLUMN ${n} ${t}`);

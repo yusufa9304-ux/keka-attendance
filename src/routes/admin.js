@@ -1,20 +1,25 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { db, todayStr, dateRange, isWeekend, nextEmployeeCode, PING_INTERVAL_MINUTES } from '../db.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAdmin, requireConsole } from '../middleware/auth.js';
+import { publicUser } from './auth.js';
+import { canActFor, scopeClause } from '../team.js';
 import { payrollMatrix, PAYROLL_COLUMNS } from '../payroll.js';
 import { buildXlsx, buildCsv } from '../xlsx.js';
 import { parseFlags } from '../spoof.js';
 
 const router = express.Router();
-router.use(requireAdmin);
+// The console is open to admins and to reporting managers; each route below
+// decides how far the viewer's scope reaches.
+router.use(requireConsole);
 
 const mapsUrl = (lat, lng) => (lat != null && lng != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);
 
 /* ----------------------------- Dashboard ----------------------------- */
 
-router.get('/dashboard', (_req, res) => {
+router.get('/dashboard', (req, res) => {
   const date = todayStr();
+  const scope = scopeClause(req.session.user, 'u.id');
   const totalEmployees = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'active'").get().n;
 
   const rows = db.prepare(`
@@ -27,9 +32,9 @@ router.get('/dashboard', (_req, res) => {
     FROM users u
     LEFT JOIN sites s ON s.id = u.site_id
     LEFT JOIN attendance a ON a.user_id = u.id AND a.date = ?
-    WHERE u.status = 'active' AND u.role = 'user'
+    WHERE u.status = 'active' AND u.role = 'user'${scope.sql}
     ORDER BY u.name
-  `).all(date);
+  `).all(date, ...scope.params);
 
   const lastPing = db.prepare(`
     SELECT p.user_id, p.lat, p.lng, p.address, p.captured_at
@@ -86,17 +91,19 @@ router.get('/dashboard', (_req, res) => {
 
 /* ----------------------------- Employees ----------------------------- */
 
-function publicUser(u) {
-  const { password_hash, ...rest } = u;
-  return rest;
-}
-
-router.get('/employees', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM users ORDER BY role DESC, name').all().map(publicUser);
-  res.json({ employees: rows, next_employee_code: nextEmployeeCode() });
+router.get('/employees', requireAdmin, (_req, res) => {
+  const rows = db.prepare(`
+    SELECT u.*, m.name AS manager_name
+    FROM users u LEFT JOIN users m ON m.id = u.manager_id
+    ORDER BY u.role DESC, u.name
+  `).all();
+  res.json({
+    employees: rows.map((u) => ({ ...publicUser(u), manager_name: u.manager_name || null })),
+    next_employee_code: nextEmployeeCode(),
+  });
 });
 
-router.post('/employees', (req, res) => {
+router.post('/employees', requireAdmin, (req, res) => {
   const { name, email, password, role, department, leave_balance } = req.body || {};
   let { employee_code } = req.body || {};
   if (!name || !email || !password) return res.status(400).json({ error: 'name, email and password are required' });
@@ -115,7 +122,7 @@ router.post('/employees', (req, res) => {
   res.status(201).json({ employee: publicUser(u) });
 });
 
-router.patch('/employees/:id', (req, res) => {
+router.patch('/employees/:id', requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'Employee not found' });
@@ -145,6 +152,23 @@ router.patch('/employees/:id', (req, res) => {
     status ?? null, leave_balance ?? null, password ? bcrypt.hashSync(password, 10) : null, id,
   );
 
+  // Reporting manager: a number sets it, null/'none' clears it.
+  if ('manager_id' in (req.body || {})) {
+    const raw = req.body.manager_id;
+    const mid = raw === null || raw === '' || raw === 'none' ? null : Number(raw);
+    if (mid === id) return res.status(400).json({ error: 'Someone cannot report to themselves' });
+    if (mid !== null && !db.prepare('SELECT 1 FROM users WHERE id = ?').get(mid)) {
+      return res.status(400).json({ error: 'Unknown manager' });
+    }
+    // Walk the chain upwards: the new manager must not report back to this person.
+    let cur = mid, hops = 0;
+    while (cur && hops++ < 25) {
+      if (cur === id) return res.status(400).json({ error: 'That would create a reporting loop' });
+      cur = db.prepare('SELECT manager_id FROM users WHERE id = ?').get(cur)?.manager_id ?? null;
+    }
+    db.prepare('UPDATE users SET manager_id = ? WHERE id = ?').run(mid, id);
+  }
+
   // Site assignment: a number assigns a showroom, null/'field' means field staff.
   if ('site_id' in (req.body || {})) {
     const raw = req.body.site_id;
@@ -169,12 +193,12 @@ function siteRow(s) {
   };
 }
 
-router.get('/sites', (_req, res) => {
+router.get('/sites', requireAdmin, (_req, res) => {
   const rows = db.prepare('SELECT * FROM sites ORDER BY name').all();
   res.json({ sites: rows.map(siteRow) });
 });
 
-router.post('/sites', (req, res) => {
+router.post('/sites', requireAdmin, (req, res) => {
   const { name, address, lat, lng, radius_m } = req.body || {};
   const la = Number(lat), ln = Number(lng);
   if (!name) return res.status(400).json({ error: 'A name is required' });
@@ -186,7 +210,7 @@ router.post('/sites', (req, res) => {
   res.status(201).json({ site: siteRow(db.prepare('SELECT * FROM sites WHERE id = ?').get(info.lastInsertRowid)) });
 });
 
-router.patch('/sites/:id', (req, res) => {
+router.patch('/sites/:id', requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const existing = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'Site not found' });
@@ -205,7 +229,7 @@ router.patch('/sites/:id', (req, res) => {
   res.json({ site: siteRow(db.prepare('SELECT * FROM sites WHERE id = ?').get(id)) });
 });
 
-router.delete('/sites/:id', (req, res) => {
+router.delete('/sites/:id', requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   if (!db.prepare('SELECT 1 FROM sites WHERE id = ?').get(id)) return res.status(404).json({ error: 'Site not found' });
   db.prepare('UPDATE users SET site_id = NULL WHERE site_id = ?').run(id);
@@ -215,13 +239,13 @@ router.delete('/sites/:id', (req, res) => {
 
 /* ----------------------------- Payroll ----------------------------- */
 
-router.get('/payroll', (req, res) => {
+router.get('/payroll', requireAdmin, (req, res) => {
   const month = req.query.month || todayStr().slice(0, 7);
   const { columns, records } = payrollMatrix(month);
   res.json({ month, columns, records });
 });
 
-router.get('/payroll/export', (req, res) => {
+router.get('/payroll/export', requireAdmin, (req, res) => {
   const month = req.query.month || todayStr().slice(0, 7);
   const format = (req.query.format || 'csv').toLowerCase();
   const { columns, rows } = payrollMatrix(month);
@@ -250,6 +274,9 @@ router.get('/attendance', (req, res) => {
   if (from) { clauses.push('a.date >= ?'); params.push(from); }
   if (to) { clauses.push('a.date <= ?'); params.push(to); }
   if (user_id) { clauses.push('a.user_id = ?'); params.push(Number(user_id)); }
+  const scope = scopeClause(req.session.user, 'a.user_id');
+  if (scope.sql) clauses.push(scope.sql.replace(/^ AND /, ''));
+  params.push(...scope.params);
 
   const where = clauses.length ? 'WHERE ' + clauses.join(' AND ') : '';
   const rows = db.prepare(`
@@ -274,6 +301,8 @@ router.get('/attendance', (req, res) => {
 /** Latest known location for every employee on the clock today. */
 router.get('/locations', (req, res) => {
   const date = req.query.date || todayStr();
+  const scope = scopeClause(req.session.user, 'u.id');
+  const pingScope = scopeClause(req.session.user, 'user_id');
 
   const employees = db.prepare(`
     SELECT u.id, u.name, u.department, u.employee_code,
@@ -282,14 +311,14 @@ router.get('/locations', (req, res) => {
            a.out_lat, a.out_lng, a.out_address, a.out_photo
     FROM users u
     LEFT JOIN attendance a ON a.user_id = u.id AND a.date = ?
-    WHERE u.status = 'active' AND u.role = 'user'
+    WHERE u.status = 'active' AND u.role = 'user'${scope.sql}
     ORDER BY u.name
-  `).all(date);
+  `).all(date, ...scope.params);
 
   const pings = db.prepare(`
     SELECT id, user_id, lat, lng, accuracy, address, captured_at, source
-    FROM location_pings WHERE date = ? ORDER BY captured_at DESC
-  `).all(date);
+    FROM location_pings WHERE date = ?${pingScope.sql} ORDER BY captured_at DESC
+  `).all(date, ...pingScope.params);
 
   const byUser = {};
   for (const p of pings) (byUser[p.user_id] ||= []).push(p);
@@ -325,10 +354,14 @@ router.get('/locations', (req, res) => {
 /** Full location trail for one employee on a day. */
 router.get('/locations/:userId/trail', (req, res) => {
   const date = req.query.date || todayStr();
+  const target = Number(req.params.userId);
+  if (target !== req.session.user.id && !canActFor(req.session.user, target)) {
+    return res.status(403).json({ error: 'This person is not in your team' });
+  }
   const rows = db.prepare(`
     SELECT lat, lng, accuracy, address, captured_at, source
     FROM location_pings WHERE user_id = ? AND date = ? ORDER BY captured_at
-  `).all(Number(req.params.userId), date);
+  `).all(target, date);
   res.json({ date, pings: rows.map((p) => ({ ...p, map_url: mapsUrl(p.lat, p.lng) })) });
 });
 
@@ -336,8 +369,10 @@ router.get('/locations/:userId/trail', (req, res) => {
 
 router.get('/leaves', (req, res) => {
   const status = req.query.status;
-  const where = status ? 'WHERE l.status = ?' : '';
+  const scope = scopeClause(req.session.user, 'l.user_id');
   const params = status ? [status] : [];
+  const where = (status ? 'WHERE l.status = ?' : 'WHERE 1 = 1') + scope.sql;
+  params.push(...scope.params);
   const rows = db.prepare(`
     SELECT l.*, u.name AS employee_name, u.department
     FROM leaves l JOIN users u ON u.id = l.user_id
@@ -354,6 +389,9 @@ router.patch('/leaves/:id', (req, res) => {
 
   const leave = db.prepare('SELECT * FROM leaves WHERE id = ?').get(id);
   if (!leave) return res.status(404).json({ error: 'Leave request not found' });
+  if (!canActFor(req.session.user, leave.user_id)) {
+    return res.status(403).json({ error: 'This request is not in your team' });
+  }
   if (leave.status !== 'pending') return res.status(409).json({ error: 'This request has already been reviewed' });
 
   const status = action === 'approve' ? 'approved' : 'rejected';
@@ -383,8 +421,10 @@ router.patch('/leaves/:id', (req, res) => {
 
 router.get('/regularizations', (req, res) => {
   const status = req.query.status;
-  const where = status ? 'WHERE r.status = ?' : '';
+  const scope = scopeClause(req.session.user, 'r.user_id');
   const params = status ? [status] : [];
+  const where = (status ? 'WHERE r.status = ?' : 'WHERE 1 = 1') + scope.sql;
+  params.push(...scope.params);
   const rows = db.prepare(`
     SELECT r.*, u.name AS employee_name, u.department
     FROM regularizations r JOIN users u ON u.id = r.user_id
@@ -401,6 +441,9 @@ router.patch('/regularizations/:id', (req, res) => {
 
   const reg = db.prepare('SELECT * FROM regularizations WHERE id = ?').get(id);
   if (!reg) return res.status(404).json({ error: 'Regularization not found' });
+  if (!canActFor(req.session.user, reg.user_id)) {
+    return res.status(403).json({ error: 'This request is not in your team' });
+  }
   if (reg.status !== 'pending') return res.status(409).json({ error: 'This request has already been reviewed' });
 
   const status = action === 'approve' ? 'approved' : 'rejected';
@@ -430,7 +473,7 @@ router.patch('/regularizations/:id', (req, res) => {
 
 /* ----------------------------- Reports ----------------------------- */
 
-router.get('/reports/summary', (req, res) => {
+router.get('/reports/summary', requireAdmin, (req, res) => {
   const month = req.query.month || todayStr().slice(0, 7);
   const rows = db.prepare(`
     SELECT u.id, u.name, u.department, u.employee_code,

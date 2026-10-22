@@ -357,11 +357,18 @@ tbody tr:nth-child(8) { animation-delay: .25s; }
     display: flex; gap: 2px; z-index: 40;
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
     box-shadow: 0 -6px 18px rgba(20, 17, 11, .07);
+    /* A reporting manager carries more tabs than an employee. Let the bar fill
+       the width when they fit, and scroll instead of crushing them when they
+       do not — flex: 1 alone squeezed labels down to ~30px. */
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
   }
+  .nav .links::-webkit-scrollbar { display: none; }
   .nav .links button {
-    flex: 1; padding: 7px 4px; font-size: .72rem; border-radius: 12px;
+    flex: 1 0 auto; min-width: 66px; padding: 7px 8px; font-size: .72rem; border-radius: 12px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 4px; min-height: 46px; line-height: 1.15; text-align: center;
+    scroll-snap-align: center;
   }
   .nav .links button.active { background: var(--brand-soft); }
   .nav .links .badge { position: absolute; margin: -22px 0 0 26px; }

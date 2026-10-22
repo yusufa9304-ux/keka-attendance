@@ -3,7 +3,18 @@ let ME = null;
 (async function init() {
   ME = await currentUser();
   if (!ME) return (location.href = '/');
-  if (ME.role !== 'admin') return (location.href = '/dashboard');
+  if (!ME.can_console) return (location.href = '/dashboard');
+  const isAdmin = ME.role === 'admin';
+  // A reporting manager gets the team screens only, not company-wide settings.
+  if (!isAdmin) {
+    document.querySelectorAll('[data-admin-only]').forEach((b) => b.classList.add('hidden'));
+    document.querySelectorAll('[data-panel="employees"], [data-panel="sites"], [data-panel="reports"]')
+      .forEach((p) => p.classList.add('hidden'));
+    const badge = document.getElementById('nav-role-badge');
+    if (badge) { badge.textContent = 'Manager'; badge.className = 'badge working'; }
+    const h = document.getElementById('team-heading');
+    if (h) h.textContent = `My team — today (${ME.reports} ${ME.reports === 1 ? 'person' : 'people'})`;
+  }
 
   document.getElementById('nav-avatar').textContent = initials(ME.name);
   document.getElementById('nav-name').textContent = ME.name;
@@ -30,9 +41,17 @@ document.querySelectorAll('.tabs button').forEach((b) => {
 let SITES = [];
 
 async function refreshAll() {
-  await Promise.all([loadDashboard(), loadLocations(), loadLeaves(), loadRegs(), loadReport()]);
-  await loadSites();      // populates SITES
-  await loadEmployees();  // uses SITES for the pickers
+  // A reporting manager gets the team screens only. Asking for the admin-only
+  // endpoints would 403 and blow up the whole refresh, so skip them entirely.
+  const isAdmin = ME?.role === 'admin';
+  await Promise.all([
+    loadDashboard(), loadLocations(), loadLeaves(), loadRegs(),
+    ...(isAdmin ? [loadReport()] : []),
+  ]);
+  if (isAdmin) {
+    await loadSites();      // populates SITES
+    await loadEmployees();  // uses SITES for the pickers
+  }
 }
 
 /* ---- sites (geofences) ---- */
@@ -268,6 +287,7 @@ async function loadEmployees() {
       <td class="muted small">${esc(e.email)}</td>
       <td class="muted small">${esc(e.employee_code || '—')}</td>
       <td>${esc(e.department || '—')}</td>
+      <td><select data-mgr-set="${e.id}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;max-width:190px">${managerOptions(e.id, e.manager_id, employees)}</select></td>
       <td>${e.role === 'admin' ? '<span class="muted small">—</span>' : `<select data-site-set="${e.id}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;max-width:190px">${siteOptions(e.site_id)}</select>`}</td>
       <td><span class="badge ${e.role === 'admin' ? 'role-admin' : 'present'}">${label(e.role)}</span></td>
       <td class="num">${e.leave_balance}</td>
@@ -278,6 +298,21 @@ async function loadEmployees() {
       </td>
     </tr>`).join('');
   body.querySelectorAll('[data-site-set]').forEach((el) => (el.onchange = () => patchEmployeeSite(Number(el.dataset.siteSet), el.value)));
+  body.querySelectorAll('[data-mgr-set]').forEach((el) => (el.onchange = () => patchManager(Number(el.dataset.mgrSet), el.value)));
+}
+
+/* Reporting manager picker: anyone except the person themselves. */
+const managerOptions = (id, selected, all) => '<option value="none"'
+  + (selected == null ? ' selected' : '') + '>— nobody (reports to admin) —</option>'
+  + all.filter((m) => m.id !== id)
+    .map((m) => `<option value="${m.id}"${selected === m.id ? ' selected' : ''}>${esc(m.name)}</option>`).join('');
+
+async function patchManager(id, value) {
+  try {
+    await api('/admin/employees/' + id, { method: 'PATCH', body: { manager_id: value === 'none' ? null : Number(value) } });
+    toast('Reporting manager updated');
+    await refreshAll();
+  } catch (err) { toast(err.message, true); await loadEmployees(); }
 }
 
 async function patchEmployeeSite(id, value) {

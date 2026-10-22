@@ -9,7 +9,14 @@ let PING_MIN = 10;
 
   document.getElementById('nav-avatar').textContent = initials(ME.name);
   document.getElementById('nav-name').textContent = ME.name;
-  document.getElementById('nav-role').textContent = ME.department ? `${ME.department} · Employee` : 'Employee';
+  document.getElementById('nav-role').textContent = ME.is_manager
+    ? (ME.department ? `${ME.department} · Manager` : 'Manager')
+    : (ME.department ? `${ME.department} · Employee` : 'Employee');
+  // A reporting manager gets a way through to their team.
+  if (ME.can_console) document.getElementById('nav-team')?.classList.remove('hidden');
+  // Who this person answers to, so the reporting line is visible to them too.
+  const rt = document.getElementById('reports-to');
+  if (rt) rt.textContent = ME.manager_name ? `Reporting to ${ME.manager_name}` : 'No reporting manager set';
   document.getElementById('first-name').textContent = ME.name.split(' ')[0];
   if (ME.employee_code) document.getElementById('head-sub').textContent = `${ME.employee_code} · ${ME.department || 'Employee'}`;
 

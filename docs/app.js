@@ -22,12 +22,20 @@ function seed() {
     { id: 5, name: 'Vutto Yard — Dwarka', address: 'Dwarka, New Delhi', lat: 28.5921, lng: 77.0460, radius_m: 400, active: true },
   ];
   const mk = (name, email, password, role, department, code, bal, siteId) =>
-    users.push({ id: users.length + 1, name, email, password, role, department, employee_code: code, status: 'active', leave_balance: bal, site_id: siteId ?? null });
+    users.push({ id: users.length + 1, name, email, password, role, department, employee_code: code, status: 'active', leave_balance: bal, site_id: siteId ?? null, manager_id: null });
   mk('Yusuf Admin', 'admin@vutto.demo', 'Admin@123', 'admin', 'HR', 'VUT-0001', 18, 1);
   mk('Aarav Sharma', 'aarav@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0002', 14, 1);
   mk('Priya Nair', 'priya@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0003', 16, 2);
   mk('Rahul Verma', 'rahul@vutto.demo', 'User@123', 'user', 'Field Sales', 'VUT-0004', 12, null);
   mk('Sneha Iyer', 'sneha@vutto.demo', 'User@123', 'user', 'Refurb', 'VUT-0005', 18, 3);
+
+  // Reporting lines.   Admin -> Aarav, Priya   |   Aarav -> Priya, Rahul   |   Priya -> Sneha
+  const byMail = Object.fromEntries(users.map((x) => [x.email, x]));
+  const link = (who, mgr) => { byMail[who].manager_id = byMail[mgr].id; };
+  link('aarav@vutto.demo', 'admin@vutto.demo');
+  link('priya@vutto.demo', 'aarav@vutto.demo');
+  link('rahul@vutto.demo', 'aarav@vutto.demo');
+  link('sneha@vutto.demo', 'priya@vutto.demo');
 
   const SITES = [
     { lat: 28.6139, lng: 77.2090, address: 'Connaught Place, New Delhi' },
@@ -150,6 +158,34 @@ function toast(msg, isErr = false) {
 /* ----------------------------- actions ----------------------------- */
 const todayRow = (uid) => DB.attendance.find((a) => a.user_id === uid && a.date === todayStr());
 const workedHours = (r) => (r && r.worked_minutes ? +(r.worked_minutes / 60).toFixed(2) : 0);
+
+/* ---- reporting lines (same rules as the server) ---- */
+const teamIds = (u) => DB.users.filter((x) => x.manager_id === u.id && x.status === 'active').map((x) => x.id);
+const isManager = (u) => !!u && u.role !== 'admin' && teamIds(u).length > 0;
+const canConsole = (u) => !!u && (u.role === 'admin' || isManager(u));
+/** May `viewer` approve or inspect `targetId`'s requests? Nobody approves their own. */
+const canActFor = (viewer, targetId) => !!viewer
+  && (viewer.role === 'admin' || (viewer.id !== targetId && teamIds(viewer).includes(targetId)));
+const scopedEmployees = (u) => (u.role === 'admin'
+  ? DB.users.filter((x) => x.role === 'user')
+  : DB.users.filter((x) => teamIds(u).includes(x.id)));
+const managerName = (u) => (u.manager_id ? (DB.users.find((x) => x.id === u.manager_id) || {}).name || null : null);
+const pendingFor = (u) => DB.leaves.filter((l) => l.status === 'pending' && canActFor(u, l.user_id)).length
+  + DB.regularizations.filter((r) => r.status === 'pending' && canActFor(u, r.user_id)).length;
+
+/** The tab strip. Everyone gets their own day; console users get the team tabs. */
+function navTabs(u) {
+  const admin = u.role === 'admin';
+  const tabs = [];
+  if (!admin) tabs.push(['home', 'My Day'], ['history', 'My Attendance'], ['leave', 'Leaves'], ['reg', 'Regularization']);
+  if (canConsole(u)) {
+    const n = pendingFor(u);
+    tabs.push(['team', admin ? 'Team Today' : 'My Team'], ['locations', 'Locations'],
+      ['approvals', `Approvals ${n ? `<span class="badge pending">${n}</span>` : ''}`]);
+  }
+  if (admin) tabs.push(['employees', 'Employees'], ['sites', 'Sites'], ['reports', 'Reports']);
+  return tabs;
+}
 
 /* ---- geofence + fake-GPS helpers (same logic as the server) ---- */
 const siteForUser = (u) => (u && u.site_id ? DB.sites.find((s) => s.id === u.site_id && s.active !== false) || null : null);
@@ -324,6 +360,7 @@ function raiseReg(body) {
 function reviewLeave(id, action) {
   const l = DB.leaves.find((x) => x.id === id);
   if (!l || l.status !== 'pending') return toast('This request has already been reviewed', true);
+  if (!canActFor(me(), l.user_id)) return toast('This request is not in your team', true);
   l.status = action === 'approve' ? 'approved' : 'rejected';
   l.reviewed_at = new Date().toISOString();
   if (l.status === 'approved') {
@@ -341,6 +378,7 @@ function reviewLeave(id, action) {
 function reviewReg(id, action) {
   const r = DB.regularizations.find((x) => x.id === id);
   if (!r || r.status !== 'pending') return toast('This request has already been reviewed', true);
+  if (!canActFor(me(), r.user_id)) return toast('This request is not in your team', true);
   r.status = action === 'approve' ? 'approved' : 'rejected';
   r.reviewed_at = new Date().toISOString();
   if (r.status === 'approved') {
@@ -374,6 +412,20 @@ function addEmployee(body) {
   });
   persist(); toast('Employee created'); closeModal(); render();
 }
+function setManager(id, managerId) {
+  if (managerId === id) return toast('Someone cannot report to themselves', true);
+  // Walk the chain up: the new manager must not report back to this person.
+  let cur = managerId, hops = 0;
+  while (cur && hops++ < 25) {
+    if (cur === id) return toast('That would create a reporting loop', true);
+    cur = (DB.users.find((x) => x.id === cur) || {}).manager_id ?? null;
+  }
+  const e = DB.users.find((x) => x.id === id);
+  if (!e) return;
+  e.manager_id = managerId;
+  persist(); toast(managerId ? 'Reporting manager updated' : 'Reporting manager cleared'); render();
+}
+
 function patchEmployee(id, patch) {
   const u = DB.users.find((x) => x.id === id);
   if (!u) return;
@@ -399,16 +451,27 @@ function render() {
 
   document.getElementById('nav-avatar').textContent = initials(u.name);
   document.getElementById('nav-name').textContent = u.name;
-  document.getElementById('nav-role').textContent = u.role === 'admin' ? 'Administrator' : (u.department ? `${u.department} · Employee` : 'Employee');
-  document.getElementById('admin-tag').classList.toggle('hidden', u.role !== 'admin');
+  document.getElementById('nav-role').textContent = u.role === 'admin'
+    ? 'Administrator'
+    : isManager(u) ? (u.department ? `${u.department} · Manager` : 'Manager')
+      : (u.department ? `${u.department} · Employee` : 'Employee');
+  const tag = document.getElementById('admin-tag');
+  if (tag) {
+    // Set the classes first: assigning className replaces the whole list, so
+    // adding 'hidden' before it would be wiped straight back out.
+    tag.className = u.role === 'admin' ? 'badge role-admin' : 'badge working';
+    tag.textContent = u.role === 'admin' ? 'Admin' : 'Manager';
+    tag.classList.toggle('hidden', !canConsole(u));
+  }
 
-  if (u.role === 'admin') renderAdmin(); else renderUser();
+  const consoleTab = ['team', 'locations', 'approvals', 'employees', 'sites', 'reports'].includes(ui.tab);
+  if (consoleTab && canConsole(u)) renderAdmin(); else renderUser();
 }
 
 function renderUser() {
   const u = me();
   if (!ui.tab) ui.tab = 'home';
-  const tabs = [['home', 'My Day'], ['history', 'My Attendance'], ['leave', 'Leaves'], ['reg', 'Regularization']];
+  const tabs = navTabs(u);
   document.getElementById('nav-links').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}</button>`).join('');
 
   const month = todayStr().slice(0, 7);
@@ -472,6 +535,7 @@ function renderUser() {
       ${t && t.in_distance_m != null ? `<div style="margin-top:10px">${geoBadge(t, 'in')} ${spoofBadge(t, 'in')}</div>` : ''}
       ${t && t.out_distance_m != null ? `<div style="margin-top:6px">${geoBadge(t, 'out')} ${spoofBadge(t, 'out')}</div>` : ''}
       ${!t && siteForUser(u) ? `<div class="track-note" style="margin-top:14px">You are checked against <b>${esc(siteForUser(u).name)}</b> — punch within ${siteForUser(u).radius_m} m.</div>` : ''}
+      <div class="small muted" style="margin-top:10px">${managerName(u) ? `Reporting to <b>${esc(managerName(u))}</b>` : 'No reporting manager set'}</div>
       <div class="track-note">${onClock
         ? `📍 On the clock — location updates every ${PING_MIN} min (${pingsToday} update${pingsToday === 1 ? '' : 's'} so far today).`
         : `📍 Location + a selfie are required for every punch. ${pingsToday ? pingsToday + ' location update(s) recorded today.' : ''}`}</div>
@@ -566,16 +630,18 @@ function renderAdmin() {
   const u = me();
   if (!ui.tab || !['team', 'locations', 'approvals', 'employees', 'sites', 'reports'].includes(ui.tab)) ui.tab = 'team';
   if (!ui.atab) ui.atab = 'leaves';
-  const pendingLeaves = DB.leaves.filter((l) => l.status === 'pending').length;
-  const pendingRegs = DB.regularizations.filter((r) => r.status === 'pending').length;
+  // Everything below is limited to what this viewer may see.
+  const mine = (uid) => canActFor(u, uid);
+  const pendingLeaves = DB.leaves.filter((l) => l.status === 'pending' && mine(l.user_id)).length;
+  const pendingRegs = DB.regularizations.filter((r) => r.status === 'pending' && mine(r.user_id)).length;
   const pending = pendingLeaves + pendingRegs;
   const pendingRegByUser = {};
-  for (const r of DB.regularizations) if (r.status === 'pending') pendingRegByUser[r.user_id] = (pendingRegByUser[r.user_id] || 0) + 1;
-  const tabs = [['team', 'Team Today'], ['locations', 'Locations'], ['approvals', `Approvals ${pending ? `<span class="badge pending">${pending}</span>` : ''}`], ['employees', 'Employees'], ['sites', 'Sites'], ['reports', 'Reports']];
+  for (const r of DB.regularizations) if (r.status === 'pending' && mine(r.user_id)) pendingRegByUser[r.user_id] = (pendingRegByUser[r.user_id] || 0) + 1;
+  const tabs = navTabs(u);
   document.getElementById('nav-links').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}</button>`).join('');
 
   const date = todayStr();
-  const emps = DB.users.filter((x) => x.status === 'active' && x.role === 'user');
+  const emps = scopedEmployees(u).filter((x) => x.status === 'active');
   const team = emps.map((e) => {
     const a = DB.attendance.find((x) => x.user_id === e.id && x.date === date);
     const state = a && a.clock_in && !a.clock_out ? 'working' : a && a.clock_out ? 'done' : a && a.status === 'on_leave' ? 'on_leave' : 'not_in';
@@ -618,6 +684,10 @@ function renderAdmin() {
   const photoCell = (src) => (src
     ? `<img class="punch-photo" src="${src}" alt="punch photo" onclick="viewPhoto(this.src)" />`
     : '<span class="muted small">—</span>');
+  const managerSelect = (e) => `<select data-mgr-set="${e.id}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;max-width:190px">
+      <option value="none"${e.manager_id == null ? ' selected' : ''}>— nobody (reports to admin) —</option>
+      ${DB.users.filter((m) => m.id !== e.id).map((m) => `<option value="${m.id}"${e.manager_id === m.id ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}
+    </select>`;
   const siteSelect = (e) => `<select data-site-set="${e.id}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;max-width:190px">
       <option value="field"${e.site_id == null ? ' selected' : ''}>Field (no site)</option>
       ${DB.sites.map((s) => `<option value="${s.id}"${e.site_id === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
@@ -652,8 +722,8 @@ function renderAdmin() {
         <td>${latest ? locCell(latest.lat, latest.lng, latest.address) : '<span class="muted small">—</span>'}</td>
         <td class="num">${count}</td></tr>`).join('')}</tbody></table></div>`;
   } else if (ui.tab === 'approvals') {
-    const leaves = DB.leaves.slice().sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
-    const regs = DB.regularizations.slice().sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
+    const leaves = DB.leaves.filter((l) => mine(l.user_id)).sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
+    const regs = DB.regularizations.filter((r) => mine(r.user_id)).sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.id - a.id);
     panel = `<div class="tabs">
         <button data-atab="leaves" class="${ui.atab === 'leaves' ? 'active' : ''}">Leave requests ${pendingLeaves ? `<span class="badge pending">${pendingLeaves}</span>` : ''}</button>
         <button data-atab="regs" class="${ui.atab === 'regs' ? 'active' : ''}">Regularizations ${pendingRegs ? `<span class="badge pending">${pendingRegs}</span>` : ''}</button>
@@ -682,10 +752,11 @@ function renderAdmin() {
     panel = `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2>Employees</h2>
         <button class="btn primary sm" id="add-emp">+ Add employee</button></div>
-      <table><thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Site</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Reporting manager</th><th>Site</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
       <tbody>${DB.users.slice().sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'admin' ? -1 : 1)).map((e) => `<tr>
         <td><b>${esc(e.name)}</b></td><td class="muted small">${esc(e.email)}</td><td class="muted small">${esc(e.employee_code || '—')}</td>
         <td>${esc(e.department || '—')}</td>
+        <td>${managerSelect(e)}</td>
         <td>${siteSelect(e)}</td>
         <td><span class="badge ${e.role === 'admin' ? 'role-admin' : 'present'}">${label(e.role)}</span></td>
         <td class="num">${e.leave_balance}</td><td><span class="badge ${e.status}">${label(e.status)}</span></td>
@@ -878,6 +949,7 @@ function bindAdmin() {
   mainEl().querySelectorAll('[data-site-toggle]').forEach((el) => (el.onclick = () => toggleSite(Number(el.dataset.siteToggle))));
   mainEl().querySelectorAll('[data-site-del]').forEach((el) => (el.onclick = () => deleteSite(Number(el.dataset.siteDel))));
   mainEl().querySelectorAll('[data-site-set]').forEach((el) => (el.onchange = () => patchEmployee(Number(el.dataset.siteSet), { site_id: el.value === 'field' ? null : Number(el.value) })));
+  mainEl().querySelectorAll('[data-mgr-set]').forEach((el) => (el.onchange = () => setManager(Number(el.dataset.mgrSet), el.value === 'none' ? null : Number(el.value))));
   mainEl().querySelectorAll('[data-goto]').forEach((el) => (el.onclick = () => {
     ui.tab = 'approvals'; ui.atab = el.dataset.goto; render();
   }));
@@ -934,7 +1006,7 @@ document.getElementById('login-form').onsubmit = (e) => {
   if (u.status !== 'active') return toast('This account has been deactivated. Contact your admin.', true);
   DB.session = u.id; persist();
   // Reset any stale tab from a previous session so the right console opens.
-  ui.tab = u.role === 'admin' ? 'team' : 'home';
+  ui.tab = u.role === 'admin' ? 'team' : 'home';   // managers land on their own day, with a My Team tab
   ui.atab = 'leaves';
   render();
 };

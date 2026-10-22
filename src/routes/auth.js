@@ -4,7 +4,16 @@ import { db } from '../db.js';
 
 const router = express.Router();
 
-function publicUser(u) {
+/**
+ * What the client is allowed to know about a user. Reporting-line fields are
+ * computed here so every screen agrees on who is a manager.
+ */
+export function publicUser(u) {
+  const reports = db.prepare("SELECT COUNT(*) AS n FROM users WHERE manager_id = ? AND status = 'active'").get(u.id).n;
+  const mgr = u.manager_id
+    ? db.prepare('SELECT id, name FROM users WHERE id = ?').get(u.manager_id)
+    : null;
+  const isAdminUser = u.role === 'admin';
   return {
     id: u.id,
     name: u.name,
@@ -14,6 +23,14 @@ function publicUser(u) {
     employee_code: u.employee_code,
     status: u.status,
     leave_balance: u.leave_balance,
+    site_id: u.site_id ?? null,
+    // reporting line
+    manager_id: u.manager_id ?? null,
+    manager_name: mgr ? mgr.name : null,
+    reports,
+    is_manager: !isAdminUser && reports > 0,
+    // may this person open the team console at all?
+    can_console: isAdminUser || reports > 0,
   };
 }
 
@@ -39,7 +56,7 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', (req, res) => {
   if (!req.session?.user) return res.status(401).json({ error: 'Not authenticated' });
-  // Refresh from DB so role/status changes take effect.
+  // Refresh from DB so role/status/reporting-line changes take effect.
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
   if (!user) return res.status(401).json({ error: 'Not authenticated' });
   req.session.user = publicUser(user);

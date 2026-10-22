@@ -35,6 +35,13 @@ Node.js + Express + SQLite (`better-sqlite3`) on the backend, plain HTML/CSS/JS 
 - Columns: employee code, name, department, site, present, half days, absent, paid leave, unpaid leave (LOP), **payable days**, worked hours, overtime hours, late marks, outside-geofence count, GPS-flag count.
 - The `.xlsx` is written by a small dependency-free writer (`src/xlsx.js`) that works in Node and the browser.
 
+### Reporting managers
+- There is no separate "manager" role. A manager is simply someone with people reporting to them (`users.manager_id`), so they are still an ordinary employee who punches in and out.
+- An admin sets the reporting line from the Employees screen — one dropdown per person. Self-reporting and reporting loops are refused, both in the UI and in the API.
+- A manager gets a **My Team** view: their direct reports' roster, live locations and approvals — and nothing else. Company-wide screens (Employees, Sites, Payroll, Reports) stay admin-only.
+- Scope rules live in one place (`src/team.js`) so every route agrees: admin sees everyone, a manager sees their direct reports, an employee sees only themselves. Nobody can approve their own request.
+- An employee sees who they report to on their own dashboard.
+
 ### Admin
 - **Team dashboard** — who is present, working now, absent or on leave today, with per-employee punch times, the **punch selfie**, the **check-in location** (a map link) and the **site/GPS verdict**.
 - **Live locations** — a dedicated tab showing each employee's check-in location, last-seen time, latest tracked location and how many location updates were received that day.

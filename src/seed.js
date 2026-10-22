@@ -50,6 +50,17 @@ export function runSeed({ reset = false, quiet = false } = {}) {
   ];
 
   const ids = {};
+
+  // Reporting lines: a small tree, so the manager view has something to show.
+  //   Yusuf Admin  ->  Aarav, Priya
+  //   Aarav        ->  Priya, Rahul
+  //   Priya        ->  Sneha
+  const reportTo = {
+    'aarav@vutto.demo': 'admin@vutto.demo',
+    'priya@vutto.demo': 'aarav@vutto.demo',
+    'rahul@vutto.demo': 'aarav@vutto.demo',
+    'sneha@vutto.demo': 'priya@vutto.demo',
+  };
   const tx = db.transaction(() => {
     for (const u of seedUsers) {
       const info = insertUser.run({ ...u, password_hash: hash(u.password) });
@@ -157,10 +168,17 @@ export function runSeed({ reset = false, quiet = false } = {}) {
   });
 
   tx();
+
+  // Reporting lines are set after the users exist (a manager_id points at a
+  // row created in the same run).
+  const setManager = db.prepare('UPDATE users SET manager_id = ? WHERE email = ?');
+  for (const [email, mgr] of Object.entries(reportTo)) setManager.run(ids[mgr], email);
+
   if (!quiet) {
     console.log('Seed complete.');
     console.log('  Admin : admin@vutto.demo  / Admin@123');
     console.log('  User  : aarav@vutto.demo  / User@123  (also priya/rahul/sneha @vutto.demo)');
+    console.log('  Managers: aarav (manages priya, rahul) · priya (manages sneha)');
   }
   return true;
 }

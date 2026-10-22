@@ -9,18 +9,19 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/css/style.css?v=9" />
+  <link rel="stylesheet" href="/css/style.css?v=10" />
 </head>
 <body>
   <nav class="nav">
-    <div class="brand"><img src="/img/logo.png?v=9" alt="Vutto" class="brand-logo" /> <span class="brand-sub">Attendance</span> <span class="badge role-admin" style="margin-left:4px">Admin</span></div>
+    <div class="brand"><img src="/img/logo.png?v=10" alt="Vutto" class="brand-logo" /> <span class="brand-sub">Attendance</span> <span class="badge role-admin" id="nav-role-badge" style="margin-left:4px">Admin</span></div>
     <div class="links">
       <button class="active" data-tab="team">Team Today</button>
       <button data-tab="locations">Locations</button>
       <button data-tab="approvals">Approvals <span id="appr-dot" class="badge pending" style="display:none">0</span></button>
-      <button data-tab="employees">Employees</button>
-      <button data-tab="sites">Sites</button>
-      <button data-tab="reports">Reports</button>
+      <button data-tab="employees" id="tab-employees" data-admin-only>Employees</button>
+      <button data-tab="sites" id="tab-sites" data-admin-only>Sites</button>
+      <button data-tab="reports" id="tab-reports" data-admin-only>Reports</button>
+      <button data-tab="mytime" id="tab-mytime" onclick="location.href='/dashboard'">My Day</button>
     </div>
     <div class="spacer"></div>
     <div class="user">
@@ -54,7 +55,7 @@
     <!-- ============ TEAM ============ -->
     <section data-panel="team">
       <div class="card">
-        <h2>Team status — today</h2>
+        <h2 id="team-heading">Team status — today</h2>
         <table>
           <thead><tr><th>Employee</th><th>Department</th><th>Clock in</th><th>Clock out</th><th class="num">Worked</th><th>Photo</th><th>Check-in location</th><th>Site / GPS</th><th>State</th></tr></thead>
           <tbody id="team-body"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
@@ -106,8 +107,8 @@
           <button class="btn primary sm" onclick="openAdd()">+ Add employee</button>
         </div>
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Site</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
-          <tbody id="emp-body"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Department</th><th>Reporting manager</th><th>Site</th><th>Role</th><th class="num">Leave bal.</th><th>Status</th><th></th></tr></thead>
+          <tbody id="emp-body"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -170,7 +171,7 @@
     </div>
   </div>
 
-  <script src="/js/api.js?v=9"></script>
-  <script src="/js/admin.js?v=9"></script>
+  <script src="/js/api.js?v=10"></script>
+  <script src="/js/admin.js?v=10"></script>
 </body>
 </html>
