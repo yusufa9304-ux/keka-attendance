@@ -13,7 +13,7 @@
 <link rel="manifest" href="./manifest.webmanifest" />
 <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" />
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-<link rel="stylesheet" href="./style.css?v=16" />
+<link rel="stylesheet" href="./style.css?v=17" />
 <script>
   /* Runs BEFORE the app, so recovery works even if an old app.js is cached.
      If the stored data has no active admin (someone demoted the only admin),
@@ -40,7 +40,7 @@
 <div id="login-view">
   <div class="login-shell">
     <div class="login-hero">
-      <img src="./img/logo-white.png?v=16" alt="Vutto" class="hero-logo-img" />
+      <img src="./img/logo-white.svg?v=17" alt="Vutto" class="hero-logo-img" />
       <h1>Clock in. Ride out.</h1>
       <p>The Vutto attendance desk — punch in and out, apply for leave, and track your month, while admins see the whole team live.</p>
       <ul>
@@ -52,7 +52,7 @@
     </div>
     <div class="login-panel">
       <div class="login-box">
-        <div class="wm"><img src="./img/logo.png?v=16" alt="Vutto" class="wm-logo" /><span class="sub">Attendance</span></div>
+        <div class="wm"><img src="./img/logo.svg?v=17" alt="Vutto" class="wm-logo" /><span class="sub">Attendance</span></div>
         <h1>Sign in</h1>
         <p class="muted small">Use your work email to continue.</p>
         <!-- The submit is cancelled inline so a submit that lands before app.js has
@@ -74,7 +74,7 @@
           <button class="btn sm ghost" id="fill-admin" type="button">Use admin</button>
           <button class="btn sm ghost" id="fill-user" type="button">Use employee</button>
         </div>
-        <p class="small muted" style="margin-top:14px">Demo build v16 — data lives in your browser only.</p>
+        <p class="small muted" style="margin-top:14px">Demo build v17 — data lives in your browser only.</p>
         <button class="btn sm ghost" id="reset-app" type="button" style="margin-top:10px">App not loading? Reset it</button>
       </div>
     </div>
@@ -85,7 +85,7 @@
 <div id="app-view" class="hidden">
   <nav class="nav">
     <div class="brand">
-      <img src="./img/logo.png?v=16" alt="Vutto" class="brand-logo" />
+      <img src="./img/logo.svg?v=17" alt="Vutto" class="brand-logo" />
       <span class="brand-sub">Attendance</span>
       <span class="badge role-admin hidden" id="admin-tag" style="margin-left:4px">Admin</span>
     </div>
@@ -108,11 +108,11 @@
 </div>
 
 <div class="modal-bg" id="modal"><div class="modal" id="modal-body"></div></div>
-<script src="./geo.js?v=16"></script>
-<script src="./xlsx.js?v=16"></script>
-<script src="./capture.js?v=16"></script>
-<script src="./navpill.js?v=16"></script>
-  <script src="./app.js?v=16"></script>
+<script src="./geo.js?v=17"></script>
+<script src="./xlsx.js?v=17"></script>
+<script src="./capture.js?v=17"></script>
+<script src="./navpill.js?v=17"></script>
+  <script src="./app.js?v=17"></script>
 <script>
   // Installable app: register the service worker.
   // The worker URL is versioned so an updated worker is always fetched, and we
@@ -124,7 +124,7 @@
       if (hadController && !reloading) { reloading = true; location.reload(); }
     });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js?v=16').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=17').catch(() => {});
     });
   }
   // If the app throws, show it instead of a blank screen.

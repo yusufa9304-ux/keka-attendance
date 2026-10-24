@@ -45,13 +45,21 @@
     }
     links._pillRetry = 0;
 
-    if (animate && !reduced) { apply(); return; }
+    // Layout can still settle a frame later (a wrapping label, a scrollbar
+    // appearing), which left the pill a pixel or two out. One follow-up frame
+    // costs nothing and keeps it exact.
+    const settle = () => {
+      if (active.offsetWidth !== pill.offsetWidth) apply();
+    };
+
+    if (animate && !reduced) { apply(); requestAnimationFrame(settle); return; }
     // No transition for this frame, so the pill is simply *there* rather than
     // flying in from the corner on the first paint or after a resize.
     pill.style.transition = 'none';
     apply();
     void pill.offsetWidth;
     pill.style.transition = '';
+    requestAnimationFrame(settle);
   }
 
   function boot() {

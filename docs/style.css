@@ -504,7 +504,7 @@ tbody tr:nth-child(8) { animation-delay: .25s; }
   .login-shell { display: block; }
   .login-shell::before {
     content: ""; display: block; height: 60px;
-    background: var(--brand) url("./img/logo-white.png") no-repeat 20px center / auto 24px;
+    background: var(--brand) url("./img/logo-white.svg") no-repeat 20px center / auto 24px;
   }
 }
 
