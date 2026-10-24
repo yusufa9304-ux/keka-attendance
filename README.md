@@ -60,6 +60,24 @@ Node.js + Express + SQLite (`better-sqlite3`) on the backend, plain HTML/CSS/JS 
 | GET | `/api/admin/payroll?month=YYYY-MM` | payroll figures as JSON |
 | GET | `/api/admin/payroll/export?month=&format=csv\|xlsx` | download the payroll sheet |
 
+### Motion
+
+The app's motion follows Apple's model rather than a set of bezier curves: an
+underdamped oscillator, `position(t) = A * cos(a*t + b) * e^(-c*t)`, baked into
+CSS `linear()` timing functions. That gives a real spring — with overshoot — and
+costs zero JavaScript. Buttons press immediately and spring back on release, the
+bar is translucent material with a backdrop blur, and everything switches off for
+`prefers-reduced-motion`.
+
+The maths follows [ktsn/css-spring-animation](https://github.com/ktsn/css-spring-animation)
+(MIT), which implements the WWDC 2023 "Animate with springs" model. Baking the
+curve into a `linear()` function follows
+[petekp/tw-spring](https://github.com/petekp/tw-spring) (MIT). The interaction
+principles — immediate pointer-down feedback, material hierarchy — are the ones
+set out in [Sunwood-ai-labs/kakeibo-apple-ui](https://github.com/Sunwood-ai-labs/kakeibo-apple-ui)
+and [FelixZoe/Micro-Lab](https://github.com/FelixZoe/Micro-Lab). No code is
+vendored from any of them; only the technique.
+
 ### Where the location comes from
 
 Location is read in the browser with the **Geolocation API** and stored with the punch (latitude, longitude, accuracy) plus a best-effort street address (reverse-geocoded via OpenStreetMap's Nominatim; if that call fails the coordinates are shown instead). Every location shows as a **Google Maps link**. Nothing is tracked while the employee is clocked out, and the periodic updates only run while the app is open.
