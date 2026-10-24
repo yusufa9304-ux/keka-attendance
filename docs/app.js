@@ -176,6 +176,25 @@ const pendingFor = (u) => DB.leaves.filter((l) => l.status === 'pending' && canA
   + DB.regularizations.filter((r) => r.status === 'pending' && canActFor(u, r.user_id)).length;
 
 /** The tab strip. Everyone gets their own day; console users get the team tabs. */
+/* The tab strip. The buttons are updated in place rather than rebuilt, because
+   rebuilding destroys the sliding pill and leaves it nowhere to travel from. */
+function renderNav(tabs) {
+  const links = document.getElementById('nav-links');
+  const wanted = tabs.map(([k]) => k).join(',');
+  if (links.dataset.tabs !== wanted) {
+    links.innerHTML = tabs.map(([k]) => `<button data-tab="${k}"></button>`).join('');
+    links.dataset.tabs = wanted;
+    if (window.syncNavPillNow) window.syncNavPillNow(links);
+  }
+  links.querySelectorAll('button').forEach((b) => {
+    const t = tabs.find(([k]) => k === b.dataset.tab);
+    const label = t ? t[1] : '';
+    if (b.innerHTML !== label) b.innerHTML = label;
+    b.classList.toggle('active', b.dataset.tab === ui.tab);
+  });
+  if (window.syncNavPill) window.syncNavPill(links);
+}
+
 function navTabs(u) {
   const admin = u.role === 'admin';
   const tabs = [];
@@ -488,7 +507,7 @@ function renderUser() {
   const u = me();
   if (!ui.tab) ui.tab = 'home';
   const tabs = navTabs(u);
-  document.getElementById('nav-links').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}</button>`).join('');
+  renderNav(tabs);
 
   const month = todayStr().slice(0, 7);
   const rows = DB.attendance.filter((a) => a.user_id === u.id && a.date.startsWith(month));
@@ -655,7 +674,7 @@ function renderAdmin() {
   const pendingRegByUser = {};
   for (const r of DB.regularizations) if (r.status === 'pending' && mine(r.user_id)) pendingRegByUser[r.user_id] = (pendingRegByUser[r.user_id] || 0) + 1;
   const tabs = navTabs(u);
-  document.getElementById('nav-links').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}</button>`).join('');
+  renderNav(tabs);
 
   const date = todayStr();
   const emps = scopedEmployees(u).filter((x) => x.status === 'active');

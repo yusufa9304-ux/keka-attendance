@@ -66,7 +66,7 @@ h2 { font-size: 1.15rem; }
 /* A reporting manager carries seven tabs. Let the strip take the free space and
    scroll sideways rather than squeezing every label onto two lines and shoving
    the name block out of the bar. */
-.nav .links { display: flex; gap: 2px; margin-left: 10px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav .links { display: flex; gap: 2px; margin-left: 10px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; position: relative; }
 .nav .links::-webkit-scrollbar { display: none; }
 .nav .links button { white-space: nowrap; flex: 0 0 auto; }
 .nav .links button {
@@ -76,7 +76,9 @@ h2 { font-size: 1.15rem; }
      without the strip having to scroll. */
   padding: 8px 11px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .93rem;
 }
-.nav .links button.active { background: var(--brand-soft); color: var(--brand); }
+/* The active background is the sliding pill, so the button itself stays clear
+   and the pill can be seen travelling underneath it. */
+.nav .links button.active { background: transparent; color: var(--brand); }
 .nav .links button:hover:not(.active) { background: var(--surface); color: var(--ink); }
 .nav .spacer { flex: 0 0 auto; }
 .nav .user { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
@@ -142,6 +144,25 @@ th, td { text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--li
 th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
 tr:last-child td { border-bottom: 0; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* The pill that slides to the active tab. It sits under the labels, so it
+   never swallows a click, and it is sized and moved from JS because the
+   tabs differ in width and the bar becomes a bottom bar on a phone. */
+.nav-pill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  transform: translateY(-50%);
+  transition: transform var(--spring-snappy) var(--ease-spring-snappy),
+              width var(--spring-snappy) var(--ease-spring-snappy);
+  pointer-events: none;
+  z-index: 0;
+}
+.nav .links button { position: relative; z-index: 1; }
 /* A wide table scrolls inside its own card instead of running off the page.
    The table keeps the plain width:100% behaviour it always had, so ordinary
    content still fits exactly as before; only content that genuinely cannot
@@ -451,7 +472,7 @@ tbody tr:nth-child(8) { animation-delay: .25s; }
     gap: 4px; min-height: 46px; line-height: 1.15; text-align: center;
     scroll-snap-align: center;
   }
-  .nav .links button.active { background: var(--brand-soft); }
+  .nav .links button.active { background: transparent; }
   .nav .links .badge { position: absolute; margin: -22px 0 0 26px; }
 
   .wrap { padding: 18px 14px 30px; }

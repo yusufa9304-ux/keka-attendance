@@ -11,12 +11,12 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/css/style.css?v=15" />
+  <link rel="stylesheet" href="/css/style.css?v=16" />
 </head>
 <body>
   <div class="login-shell">
     <div class="login-hero">
-      <img src="/img/logo-white.png?v=15" alt="Vutto" class="hero-logo-img" />
+      <img src="/img/logo-white.png?v=16" alt="Vutto" class="hero-logo-img" />
       <h1>Clock in. Ride out.</h1>
       <p>The Vutto attendance desk — punch in and out, apply for leave, and track your month, while admins see the whole team live.</p>
       <ul>
@@ -28,10 +28,12 @@
     </div>
     <div class="login-panel">
       <div class="login-box">
-        <div class="wm"><img src="/img/logo.png?v=15" alt="Vutto" class="wm-logo" /><span class="sub">Attendance</span></div>
+        <div class="wm"><img src="/img/logo.png?v=16" alt="Vutto" class="wm-logo" /><span class="sub">Attendance</span></div>
         <h1>Sign in</h1>
         <p class="muted small">Use your work email to continue.</p>
-        <form id="login-form" style="margin-top:20px">
+        <!-- The submit is cancelled inline so a submit landing before api.js has
+         attached its handler cannot navigate away and wipe what was typed. -->
+        <form id="login-form" style="margin-top:20px" onsubmit="return false">
           <div class="field">
             <label for="email">Work email</label>
             <input id="email" type="email" autocomplete="username" placeholder="you@vutto.in" required />
@@ -53,7 +55,7 @@
     </div>
   </div>
 
-  <script src="/js/api.js?v=15"></script>
-  <script src="/js/login.js?v=15"></script>
+  <script src="/js/api.js?v=16"></script>
+  <script src="/js/login.js?v=16"></script>
 </body>
 </html>

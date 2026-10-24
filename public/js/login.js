@@ -16,7 +16,9 @@ document.getElementById('fill-user').onclick = () => {
   document.getElementById('password').value = 'User@123';
 };
 
-form.onsubmit = async (e) => {
+// addEventListener, not form.onsubmit: assigning the property would replace the
+// inline guard in the markup that stops an early submit navigating away.
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   btn.disabled = true;
   btn.textContent = 'Signing in…';
@@ -31,4 +33,4 @@ form.onsubmit = async (e) => {
     btn.disabled = false;
     btn.textContent = 'Sign in';
   }
-};
+});
