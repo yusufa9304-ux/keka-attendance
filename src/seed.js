@@ -89,7 +89,10 @@ export function runSeed({ reset = false, quiet = false } = {}) {
     let dayIdx = -1; // counts working days only, so demo flags never land on a weekend
     for (let back = 14; back >= 0; back--) {
       const date = addDays(today, -back);
-      if (isWeekend(date)) continue;
+      // Keep today even when it is a weekend. Skipping it left the demo with an
+      // empty Team Today on Saturdays and Sundays, which reads as a broken app
+      // rather than a quiet day.
+      if (isWeekend(date) && back !== 0) continue;
       dayIdx++;
       for (const [i, e] of employees.entries()) {
         const uid = ids[e.email];

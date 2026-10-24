@@ -22,7 +22,19 @@ let ME = null;
   document.getElementById('rep-month').value = new Date().toISOString().slice(0, 7);
 
   await refreshAll();
+  wrapTables();
 })();
+
+/* Keep wide tables inside their card: the table keeps its natural column
+   widths, so narrow columns are never squeezed. */
+function wrapTables() {
+  document.querySelectorAll('.card > table').forEach((t) => {
+    const w = document.createElement('div');
+    w.className = 'tbl-scroll';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+}
 
 /* ---- tabs ---- */
 document.querySelectorAll('.nav .links button').forEach((b) => {

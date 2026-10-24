@@ -52,7 +52,9 @@ function seed() {
   let dayIdx = -1;
   for (let back = 14; back >= 0; back--) {
     const date = addDays(today, -back);
-    if (isWeekend(date)) continue;
+    // Keep today even at a weekend: skipping it left the demo with an empty
+    // Team Today on Saturdays and Sundays, which reads as a broken app.
+    if (isWeekend(date) && back !== 0) continue;
     dayIdx++;
     emps.forEach((e, i) => {
       const absent = back === 6 && i === 2;
@@ -446,6 +448,17 @@ function patchEmployee(id, patch) {
 const appEl = () => document.getElementById('app-view');
 const mainEl = () => document.getElementById('main');
 
+/* Keep wide tables inside their card: the table keeps its natural column
+   widths, and only the wrapper scrolls. */
+function wrapTables(root) {
+  root.querySelectorAll('.card > table').forEach((t) => {
+    const w = document.createElement('div');
+    w.className = 'tbl-scroll';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+}
+
 function render() {
   const u = me();
   if (!u) { document.getElementById('login-view').classList.remove('hidden'); appEl().classList.add('hidden'); return; }
@@ -625,6 +638,7 @@ function renderUser() {
         </div></div>`;
   }
   mainEl().innerHTML = panel;
+  wrapTables(mainEl());
   bindUser();
   startClock();
 }
@@ -819,6 +833,7 @@ function renderAdmin() {
       <button class="btn" id="refresh">↻ Refresh</button>
     </div>`;
   mainEl().innerHTML = pageHead + panel;
+  wrapTables(mainEl());
   bindAdmin();
 }
 

@@ -288,3 +288,14 @@ document.getElementById('rg-submit').onclick = async () => {
     await loadRegs();
   } catch (err) { toast(err.message, true); }
 };
+
+/* Keep wide tables inside their card, as in the admin console. */
+function wrapTables() {
+  document.querySelectorAll('.card > table').forEach((t) => {
+    const w = document.createElement('div');
+    w.className = 'tbl-scroll';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+}
+document.addEventListener('DOMContentLoaded', wrapTables);
