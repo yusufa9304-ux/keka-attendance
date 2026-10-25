@@ -198,7 +198,7 @@ function renderNav(tabs) {
 function navTabs(u) {
   const admin = u.role === 'admin';
   const tabs = [];
-  if (!admin) tabs.push(['home', 'My Day'], ['history', 'My Attendance'], ['leave', 'Leaves'], ['reg', 'Regularization']);
+  if (!admin) tabs.push(['home', 'My Day'], ['history', 'Attendance'], ['leave', 'Leaves'], ['reg', 'Regularization']);
   if (canConsole(u)) {
     const n = pendingFor(u);
     tabs.push(['team', admin ? 'Team Today' : 'My Team'], ['locations', 'Locations'],
@@ -315,7 +315,7 @@ function startTracking() {
 }
 function stopTracking() { if (tracker) { tracker.stop(); tracker = null; } }
 
-const PIN_SVG = '<svg class="pin-ico" viewBox="0 0 24 24" aria-hidden="true">'
+const PIN_SVG = '<svg class="pin-ico" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">'
   + '<path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
 
 const mapsUrl = (lat, lng) => (lat != null ? `https://www.google.com/maps?q=${lat},${lng}` : null);

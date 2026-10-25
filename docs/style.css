@@ -66,7 +66,7 @@ h2 { font-size: 1.15rem; }
 /* A reporting manager carries seven tabs. Let the strip take the free space and
    scroll sideways rather than squeezing every label onto two lines and shoving
    the name block out of the bar. */
-.nav .links { display: flex; gap: 2px; margin-left: 10px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; position: relative; }
+.nav .links { display: flex; gap: 1px; margin-left: 10px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; position: relative; }
 .nav .links::-webkit-scrollbar { display: none; }
 .nav .links button { white-space: nowrap; flex: 0 0 auto; }
 .nav .links button {
@@ -74,7 +74,7 @@ h2 { font-size: 1.15rem; }
   /* Trimmed padding, gap and size: seven tabs is the widest strip we ship, and
      this is what lets a reporting manager's nav fit on a 1280-wide laptop
      without the strip having to scroll. */
-  padding: 8px 11px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .93rem;
+  padding: 8px 10px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .93rem;
 }
 /* The active background is the sliding pill, so the button itself stays clear
    and the pill can be seen travelling underneath it. */
@@ -253,7 +253,10 @@ td { overflow-wrap: break-word; }
 .punch-photo { width: 42px; height: 42px; border-radius: 9px; object-fit: cover; border: 1px solid var(--line); cursor: pointer; display: block; background: var(--surface); }
 .photo-row { display: flex; align-items: center; gap: 10px; }
 .pin { font-weight: 700; color: var(--brand); display: inline-flex; align-items: center; }
-.pin svg.pin-ico { width: 12px; height: 12px; fill: currentColor; flex: 0 0 auto; }
+/* Unscoped on purpose: the pin is also dropped straight into a line of text
+   (the tracking note), and a scoped rule left that copy at the SVG default
+   size — a black pin the size of a postcard. */
+svg.pin-ico { width: 12px; height: 12px; fill: currentColor; flex: 0 0 auto; vertical-align: -1px; }
 .ping-count { font-size: .78rem; color: var(--muted); }
 .track-note { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; font-size: .85rem; margin-top: 14px; }
 .photo-viewer { max-width: 460px; }
