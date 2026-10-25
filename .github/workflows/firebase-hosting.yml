@@ -1,0 +1,34 @@
+# Publishes the site to Firebase Hosting on every push to main.
+#
+# It stays quiet until the key is added: if the FIREBASE_SERVICE_ACCOUNT secret
+# is missing the run simply skips, rather than showing a red cross on the repo.
+name: Publish to Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is the key in place?
+        id: ready
+        run: |
+          if [ -n "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping: add the FIREBASE_SERVICE_ACCOUNT secret to publish."
+          fi
+
+      - if: steps.ready.outputs.ok == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: vutto-attendance-app

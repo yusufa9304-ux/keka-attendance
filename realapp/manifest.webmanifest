@@ -1,0 +1,47 @@
+{
+  "name": "Vutto Attendance",
+  "short_name": "Vutto HR",
+  "description": "Vutto's attendance desk — punch in and out, apply for leave, and track your month. For employees and admins.",
+  "id": "/keka-attendance/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#E4002B",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "./icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

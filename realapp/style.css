@@ -1,0 +1,531 @@
+/* Vutto-branded attendance theme
+   Palette taken from vutto.in: crimson red (#E4002B) + near-black on white,
+   red pill buttons and soft pink tints. */
+
+:root {
+  --brand: #E4002B;          /* Vutto red */
+  --brand-dark: #C20024;
+  --brand-ink: #FFFFFF;      /* text that sits on red */
+  --brand-soft: #FDE7EC;     /* pink tint */
+  --brand-mid: #F7B9C6;
+  --ink: #17171a;
+  --muted: #6d6d75;
+  --line: #ececec;
+  --bg: #ffffff;
+  --surface: #fafafa;
+  --card: #ffffff;
+  --green: #1c8f66;
+  --green-soft: #e3f5ee;
+  --amber: #b45309;
+  --amber-soft: #fef3c7;
+  --red: #c62828;
+  --red-soft: #fdeaea;
+  --blue: #2f6fd0;
+  --blue-soft: #e7f0fd;
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(20, 17, 11, .05), 0 8px 24px rgba(20, 17, 11, .06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+a { color: var(--brand); text-decoration: none; }
+h1, h2, h3 { margin: 0 0 .2em; font-weight: 800; letter-spacing: -.02em; }
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.15rem; }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+
+/* ---------- Navbar ---------- */
+.nav {
+  display: flex; align-items: center; gap: 18px;
+  background: var(--card); border-bottom: 1px solid var(--line);
+  padding: 0 24px; height: 66px; position: sticky; top: 0; z-index: 20;
+}
+.nav .brand { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.nav .brand-logo { height: 28px; width: auto; display: block; }
+.nav .wordmark { font-weight: 800; letter-spacing: -.045em; font-size: 1.5rem; color: var(--ink); }
+.nav .wordmark .v { color: var(--brand); }
+.nav .logo {
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--brand); color: var(--brand-ink);
+  display: grid; place-items: center; font-weight: 800; font-size: 1rem;
+}
+.nav .brand-sub {
+  font-weight: 600; font-size: .82rem; color: var(--muted);
+  border-left: 1px solid var(--line); padding-left: 9px; margin-left: 1px;
+}
+/* A reporting manager carries seven tabs. Let the strip take the free space and
+   scroll sideways rather than squeezing every label onto two lines and shoving
+   the name block out of the bar. */
+.nav .links { display: flex; gap: 1px; margin-left: 10px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; position: relative; }
+.nav .links::-webkit-scrollbar { display: none; }
+.nav .links button { white-space: nowrap; flex: 0 0 auto; }
+.nav .links button {
+  border: 0; background: transparent; color: var(--muted); font: inherit;
+  /* Trimmed padding, gap and size: seven tabs is the widest strip we ship, and
+     this is what lets a reporting manager's nav fit on a 1280-wide laptop
+     without the strip having to scroll. */
+  padding: 8px 10px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .93rem;
+}
+/* The active background is the sliding pill, so the button itself stays clear
+   and the pill can be seen travelling underneath it. */
+.nav .links button.active { background: transparent; color: var(--brand); }
+.nav .links button:hover:not(.active) { background: var(--surface); color: var(--ink); }
+.nav .spacer { flex: 0 0 auto; }
+.nav .user { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.nav .user .small { white-space: nowrap; }
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--brand);
+  color: var(--brand-ink); display: grid; place-items: center; font-weight: 800; font-size: .85rem;
+}
+
+/* ---------- Layout ---------- */
+.wrap { max-width: 1120px; margin: 0 auto; padding: 26px 24px 60px; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
+.grid { display: grid; gap: 16px; }
+.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.cols-2 { grid-template-columns: 1.4fr 1fr; }
+@media (max-width: 860px) { .cols-4, .cols-3, .cols-2 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .cols-4, .cols-3, .cols-2 { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 20px; box-shadow: var(--shadow);
+}
+.card h2 { margin-bottom: 12px; }
+
+/* ---------- Stat tiles ---------- */
+.stat { display: flex; flex-direction: column; gap: 4px; }
+.stat .label { color: var(--muted); font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+.stat .value { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; }
+.stat .sub { font-size: .82rem; color: var(--muted); }
+
+/* ---------- Clock card ---------- */
+.clock { text-align: center; padding: 32px 18px; }
+.clock .now { font-size: 2.7rem; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.clock .date { color: var(--muted); margin-bottom: 18px; }
+.clock .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.punch-meta { display: flex; justify-content: center; gap: 28px; margin-top: 22px; flex-wrap: wrap; }
+.punch-meta div { text-align: center; }
+.punch-meta .k { color: var(--muted); font-size: .8rem; }
+.punch-meta .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---------- Buttons (Vutto uses red pills) ---------- */
+.btn {
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  padding: 11px 22px; border-radius: 999px; font: inherit; font-weight: 700; cursor: pointer;
+  transition: .15s; display: inline-flex; align-items: center; gap: 8px;
+}
+.btn:hover { border-color: #d6d4cb; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.btn.primary:hover { background: var(--brand-dark); border-color: var(--brand-dark); }
+.btn.green { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.dark { background: var(--ink); border-color: var(--ink); color: #fff; }
+.btn.dark:hover { background: #000; border-color: #000; }
+.btn.red { background: var(--red); border-color: var(--red); color: #fff; }
+.btn.ghost { background: transparent; }
+.btn.ghost:hover { background: var(--surface); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.sm { padding: 7px 15px; font-size: .85rem; border-radius: 999px; }
+
+/* ---------- Tables ---------- */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--line); }
+th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* The pill that slides to the active tab. It sits under the labels, so it
+   never swallows a click, and it is sized and moved from JS because the
+   tabs differ in width and the bar becomes a bottom bar on a phone. */
+.nav-pill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  transform: translateY(-50%);
+  transition: transform var(--spring-snappy) var(--ease-spring-snappy),
+              width var(--spring-snappy) var(--ease-spring-snappy);
+  pointer-events: none;
+  z-index: 0;
+}
+.nav .links button { position: relative; z-index: 1; }
+/* A wide table scrolls inside its own card instead of running off the page.
+   The table keeps the plain width:100% behaviour it always had, so ordinary
+   content still fits exactly as before; only content that genuinely cannot
+   fit makes this wrapper scroll. The wrapper is added after render. */
+.tbl-scroll { overflow-x: auto; }
+/* A long unbroken word (a name, an email, a pasted address) wraps inside
+   its cell instead of spilling over the next column. break-word only
+   splits a word that cannot fit on a line of its own, so ordinary text
+   is untouched — unlike 'anywhere', which also shrank every cell's
+   minimum width and crushed columns into 'W or ki ng'. */
+td { overflow-wrap: break-word; }
+/* Long unbroken content scrolls inside the card rather than stretching the
+   page. The table keeps its natural column widths, so narrow columns are
+   never squeezed into 'W or ki ng'. The wrapper is added after render. */
+
+/* ---------- Badges ---------- */
+.badge { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+.badge.present, .badge.approved, .badge.working, .badge.active { background: var(--green-soft); color: var(--green); }
+.badge.absent, .badge.rejected, .badge.inactive { background: var(--red-soft); color: var(--red); }
+.badge.pending, .badge.half_day { background: var(--amber-soft); color: var(--amber); }
+.badge.on_leave, .badge.done { background: var(--blue-soft); color: var(--blue); }
+.badge.not_in { background: #f1f1f1; color: var(--muted); }
+.badge.role-admin { background: var(--brand); color: var(--brand-ink); }
+
+/* ---------- Forms ---------- */
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: .85rem; font-weight: 700; margin-bottom: 6px; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px;
+  font: inherit; background: #fff; color: var(--ink);
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: 3px solid var(--brand-soft); border-color: var(--brand);
+}
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ---------- Login ---------- */
+.login-shell { min-height: 100vh; display: grid; grid-template-columns: 1.1fr .9fr; }
+.login-hero {
+  background: linear-gradient(150deg, #B00022, var(--brand) 52%, #FF3D5E);
+  color: #fff; padding: 56px;
+  display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden;
+}
+.login-hero::after {
+  content: ""; position: absolute; right: -130px; bottom: -140px;
+  width: 400px; height: 400px; border-radius: 50%;
+  background: rgba(255, 255, 255, .13);
+}
+.login-hero h1 { font-size: 2.6rem; color: #fff; max-width: 12ch; font-weight: 800; letter-spacing: -.03em; }
+.login-hero p { max-width: 40ch; opacity: .92; font-weight: 500; }
+.login-hero ul { margin-top: 22px; padding-left: 18px; line-height: 1.95; font-weight: 600; }
+/* align-self stops the flex column from stretching the logo sideways:
+   without it the wordmark is stretched to the full column width and
+   looks fat and squashed. Do not remove. */
+.login-hero .hero-logo-img { height: 44px; width: auto; align-self: flex-start; display: block; margin-bottom: 26px; }
+.login-panel { display: grid; place-items: center; padding: 40px; }
+.login-box { width: 100%; max-width: 380px; }
+.login-box .wm { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+/* The Google button. Deliberately plain: the mark carries the meaning and a
+   coloured button would fight the brand red. */
+.google-btn { width: 100%; justify-content: center; gap: 10px; margin-top: 20px; }
+.google-btn svg { flex: 0 0 auto; }
+.google-btn:disabled { opacity: .6; cursor: default; }
+#login-note.warn { color: #9B0020; font-weight: 600; }
+
+.login-box .wm .wm-logo { height: 36px; width: auto; display: block; }
+.login-box .wm .v { color: var(--brand); }
+.login-box .wm span.sub { color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: 0; border-left: 1px solid var(--line); padding-left: 10px; }
+@media (max-width: 780px) { .login-shell { grid-template-columns: 1fr; } .login-hero { display: none; } }
+
+.demo-creds { background: var(--brand-soft); border-radius: 12px; padding: 12px 14px; margin-top: 16px; font-size: .85rem; }
+.demo-creds b { color: var(--brand-dark); }
+.demo-creds button { margin-top: 8px; }
+
+/* ---------- Modal ---------- */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(20, 17, 11, .45); display: none;
+  align-items: center; justify-content: center; z-index: 50; padding: 20px;
+}
+.modal-bg.open { display: flex; }
+.modal { background: #fff; border-radius: 18px; padding: 24px; width: 100%; max-width: 460px; box-shadow: 0 20px 60px rgba(20,17,11,.3); }
+.modal h2 { margin-bottom: 16px; }
+.modal .foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* ---------- Camera capture ---------- */
+.cam-modal { max-width: 420px; }
+.cam-frame { position: relative; border-radius: 14px; overflow: hidden; background: #111; aspect-ratio: 3 / 4; margin-bottom: 14px; }
+.cam-frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam-status { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: .9rem; text-align: center; padding: 16px; }
+.cam-modal .foot { flex-wrap: wrap; }
+
+/* ---------- Location + photo bits ---------- */
+.loc { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; }
+.loc a { font-weight: 600; }
+.punch-photo { width: 42px; height: 42px; border-radius: 9px; object-fit: cover; border: 1px solid var(--line); cursor: pointer; display: block; background: var(--surface); }
+.photo-row { display: flex; align-items: center; gap: 10px; }
+.pin { font-weight: 700; color: var(--brand); display: inline-flex; align-items: center; }
+/* Unscoped on purpose: the pin is also dropped straight into a line of text
+   (the tracking note), and a scoped rule left that copy at the SVG default
+   size — a black pin the size of a postcard. */
+svg.pin-ico { width: 12px; height: 12px; fill: currentColor; flex: 0 0 auto; vertical-align: -1px; }
+.ping-count { font-size: .78rem; color: var(--muted); }
+.track-note { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; font-size: .85rem; margin-top: 14px; }
+.photo-viewer { max-width: 460px; }
+.photo-viewer img { width: 100%; border-radius: 12px; display: block; }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 999px; opacity: 0;
+  transition: .25s; z-index: 100; font-weight: 600;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.err { background: var(--red); }
+
+.empty { text-align: center; color: var(--muted); padding: 28px; }
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; background: none; font: inherit; font-weight: 700; color: var(--muted); padding: 10px 14px; cursor: pointer; border-bottom: 2px solid transparent; }
+.tabs button.active { color: var(--brand); border-bottom-color: var(--brand); }
+.hidden { display: none !important; }
+
+/* ---------- Footer note ---------- */
+.vutto-foot { text-align: center; color: var(--muted); font-size: .8rem; padding: 10px 0 30px; }
+.vutto-foot b { color: var(--brand); }
+
+/* ============================================================
+   Springs. Apple's motion is an underdamped oscillator, not a
+   bezier curve — so these are the real equation
+
+       position(t) = A * cos(a*t + b) * e^(-c*t)
+
+   baked into CSS linear() timing functions. A genuine spring
+   with overshoot, and zero JavaScript.
+
+   The maths follows ktsn/css-spring-animation (MIT), which
+   implements the WWDC 2023 "Animate with springs" model. The
+   bake-into-linear() approach follows petekp/tw-spring (MIT).
+
+   Older browsers keep the bezier: the @supports guard matters,
+   because an unsupported linear() inside a custom property
+   would silently kill the transition rather than fall back.
+   ============================================================ */
+:root {
+  --ease-spring: cubic-bezier(.22, 1, .36, 1);
+  --ease-spring-snappy: cubic-bezier(.3, 1.3, .4, 1);
+  --ease-spring-bouncy: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-spring-press: cubic-bezier(.3, 1.4, .5, 1);
+  --spring: 420ms;
+  --spring-snappy: 300ms;
+  --spring-bouncy: 520ms;
+  --spring-press: 90ms;
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    /* panels, cards and rows */
+    --ease-spring: linear(0, 0.0212, 0.0749, 0.1492, 0.2348, 0.3249, 0.4144, 0.5, 0.5795, 0.6515, 0.7155, 0.7713, 0.8192, 0.8598, 0.8935, 0.9213, 0.9437, 0.9615, 0.9754, 0.9861, 0.9941, 0.9998, 1.0039, 1.0065, 1.0081, 1.0089, 1.009, 1.0088, 1.0083, 1.0076, 1.0068, 1.006, 1.0052, 1.0044, 1.0037, 1.0031, 1.0025, 1.002, 1.0016, 1.0012, 1.0009, 1.0007, 1.0005, 1.0003, 1);
+    /* anything you touch: buttons, tabs */
+    --ease-spring-snappy: linear(0, 0.0167, 0.0602, 0.1224, 0.1965, 0.2771, 0.3598, 0.4417, 0.5202, 0.5937, 0.6613, 0.7222, 0.7763, 0.8236, 0.8643, 0.8989, 0.9278, 0.9516, 0.9707, 0.9859, 0.9977, 1.0064, 1.0128, 1.0171, 1.0197, 1.0211, 1.0214, 1.021, 1.02, 1.0186, 1.017, 1.0153, 1.0135, 1.0117, 1.0101, 1.0085, 1.0071, 1.0058, 1.0047, 1.0037, 1.0028, 1.0021, 1.0015, 1.001, 1);
+    /* small things that should feel alive: badges, toasts, sheets */
+    --ease-spring-bouncy: linear(0, 0.0118, 0.044, 0.092, 0.1518, 0.2198, 0.293, 0.3687, 0.4448, 0.5194, 0.5911, 0.6588, 0.7217, 0.7793, 0.8312, 0.8773, 0.9177, 0.9524, 0.9818, 1.0061, 1.0257, 1.0412, 1.0528, 1.061, 1.0664, 1.0692, 1.0699, 1.0689, 1.0665, 1.063, 1.0588, 1.054, 1.0488, 1.0435, 1.0382, 1.033, 1.028, 1.0233, 1.019, 1.015, 1.0114, 1.0082, 1.0054, 1.0031, 1);
+    /* the press and release of a control */
+    --ease-spring-press: linear(0, 0.011, 0.0411, 0.0865, 0.1437, 0.2094, 0.2807, 0.3553, 0.431, 0.5059, 0.5787, 0.648, 0.7132, 0.7733, 0.8282, 0.8773, 0.9208, 0.9586, 0.9908, 1.0178, 1.0398, 1.0573, 1.0706, 1.0801, 1.0863, 1.0896, 1.0905, 1.0893, 1.0864, 1.0821, 1.0768, 1.0708, 1.0643, 1.0575, 1.0507, 1.0439, 1.0374, 1.0311, 1.0253, 1.0199, 1.015, 1.0106, 1.0067, 1.0034, 1);
+  }
+}
+
+/* ---------- Material: a translucent, blurred bar ---------- */
+/* Only above the mobile breakpoint: backdrop-filter makes an element a
+   containing block for fixed children, and the phone layout turns the tab
+   strip into a fixed bottom bar. */
+@media (min-width: 721px) {
+  .nav {
+    background: rgba(255, 255, 255, .72);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+
+/* ============================================================
+   Motion — decorative only. Everything here is switched off at
+   the bottom for anyone whose device asks for reduced motion.
+   ============================================================ */
+@keyframes v-rise  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes v-fade  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v-pop   { 0% { opacity: 0; transform: scale(.86); } 60% { transform: scale(1.04); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes v-drift { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-16px, -20px) scale(1.07); } }
+@keyframes v-pulse { 0% { box-shadow: 0 0 0 0 rgba(228, 0, 43, .42); } 70% { box-shadow: 0 0 0 15px rgba(228, 0, 43, 0); } 100% { box-shadow: 0 0 0 0 rgba(228, 0, 43, 0); } }
+@keyframes v-sheen { from { transform: translateX(-130%) skewX(-18deg); } to { transform: translateX(330%) skewX(-18deg); } }
+@keyframes v-ring  { 0%, 100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.35); opacity: 0; } }
+
+/* --- cards and panels rise in, slightly staggered --- */
+.card { animation: v-rise var(--spring) var(--ease-spring) both; }
+.grid > *:nth-child(1) { animation-delay: .02s; }
+.grid > *:nth-child(2) { animation-delay: .06s; }
+.grid > *:nth-child(3) { animation-delay: .10s; }
+.grid > *:nth-child(4) { animation-delay: .14s; }
+
+/* --- table rows follow the card, a hair apart --- */
+tbody tr { animation: v-rise calc(var(--spring) - 120ms) var(--ease-spring) both; }
+tbody tr:nth-child(1) { animation-delay: .04s; }
+tbody tr:nth-child(2) { animation-delay: .07s; }
+tbody tr:nth-child(3) { animation-delay: .10s; }
+tbody tr:nth-child(4) { animation-delay: .13s; }
+tbody tr:nth-child(5) { animation-delay: .16s; }
+tbody tr:nth-child(6) { animation-delay: .19s; }
+tbody tr:nth-child(7) { animation-delay: .22s; }
+tbody tr:nth-child(8) { animation-delay: .25s; }
+
+/* --- sign-in: hero copy steps in, the soft circle drifts --- */
+.login-hero > * { animation: v-rise 500ms var(--ease-spring) both; }
+.login-hero > *:nth-child(1) { animation-delay: .05s; }
+.login-hero > *:nth-child(2) { animation-delay: .13s; }
+.login-hero > *:nth-child(3) { animation-delay: .21s; }
+.login-hero > *:nth-child(4) { animation-delay: .29s; }
+.login-hero::after { animation: v-drift 16s ease-in-out infinite; }
+.login-box { animation: v-rise 500ms var(--ease-spring) .12s both; }
+
+/* --- buttons: lift on hover, press on click, a sheen across the red one --- */
+.btn {
+  transition: transform var(--spring-snappy) var(--ease-spring-snappy), box-shadow .16s ease,
+              background .16s ease, border-color .16s ease, color .16s ease;
+}
+.btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(20, 17, 11, .10); }
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(.97); box-shadow: none;
+  /* a press should land at once, and spring back on release */
+  transition-duration: var(--spring-press);
+  transition-timing-function: var(--ease-spring-press);
+}
+.btn:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
+.btn.primary { position: relative; overflow: hidden; }
+.btn.primary::after {
+  /* left: 0 matters — without it the pseudo-element takes its static position
+     next to the label and the sheen shows up mid-button at rest. */
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 40%; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .38), transparent);
+  transform: translateX(-130%) skewX(-18deg);
+}
+.btn.primary:hover:not(:disabled)::after { animation: v-sheen .75s ease; }
+
+/* --- nav pills settle instead of snapping --- */
+.nav .links button { transition: background var(--spring-snappy) var(--ease-spring-snappy), color .18s ease, transform var(--spring-snappy) var(--ease-spring-snappy); }
+.nav .links button:active { transform: scale(.96); }
+.tabs button { transition: color .18s ease, border-color .18s ease; }
+
+/* --- "on the clock" badges breathe, so a live state reads as live --- */
+.badge.working { animation: v-pulse 2.4s ease-out infinite; }
+
+/* --- badges pop when a fresh one is rendered --- */
+.badge.pending { animation: v-pop 400ms var(--ease-spring-bouncy) both; }
+
+/* --- the clock digits get a soft fade on each minute change --- */
+.clock .now { transition: opacity .2s ease; }
+
+/* --- photos grow a little under the cursor --- */
+.punch-photo { transition: transform var(--spring-snappy) var(--ease-spring-snappy), box-shadow .18s ease; }
+.punch-photo:hover { transform: scale(1.08); box-shadow: 0 6px 16px rgba(20, 17, 11, .18); }
+
+/* --- avatar --- */
+.avatar { transition: transform .18s ease; }
+.avatar:hover { transform: scale(1.06); }
+
+/* --- modal: backdrop fades, the panel springs in --- */
+.modal-bg.open { animation: v-fade .18s ease both; }
+.modal-bg.open .modal { animation: v-pop 380ms var(--ease-spring-bouncy) both; }
+
+/* --- toast --- */
+.toast { transition: opacity .22s ease, transform 380ms var(--ease-spring-bouncy); }
+
+/* --- the app panel swaps with a quick fade so it does not flash --- */
+#main { animation: v-fade .2s ease both; }
+
+/* ============================================================
+   Respect the system setting. Anyone who has asked their device
+   to reduce motion gets none of the above.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  /* animation: none rather than a tiny duration — collapsing the duration
+     leaves an animation with fill-mode: both parked on its first keyframe,
+     which hid the content entirely. With no animation the plain styles win. */
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   Mobile / tablet — the tab strip becomes a bottom tab bar and
+   wide tables scroll horizontally instead of squashing.
+   ============================================================ */
+@media (max-width: 720px) {
+  body { padding-bottom: 74px; }
+
+  .nav { padding: 0 14px; height: 58px; gap: 10px; }
+  .nav .brand-logo { height: 24px; }
+  .nav .wordmark { font-size: 1.35rem; }
+  .nav .brand-sub { display: none; }
+  .nav .user .small { display: none; }
+
+  /* tab strip -> fixed bottom bar */
+  .nav .links {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; margin: 0;
+    background: var(--card); border-top: 1px solid var(--line);
+    display: flex; gap: 2px; z-index: 40;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 18px rgba(20, 17, 11, .07);
+    /* A reporting manager carries more tabs than an employee. Let the bar fill
+       the width when they fit, and scroll instead of crushing them when they
+       do not — flex: 1 alone squeezed labels down to ~30px. */
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .nav .links::-webkit-scrollbar { display: none; }
+  .nav .links button {
+    flex: 1 0 auto; min-width: 66px; padding: 7px 8px; font-size: .72rem; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; min-height: 46px; line-height: 1.15; text-align: center;
+    scroll-snap-align: center;
+  }
+  .nav .links button.active { background: transparent; }
+  .nav .links .badge { position: absolute; margin: -22px 0 0 26px; }
+
+  .wrap { padding: 18px 14px 30px; }
+  .page-head { align-items: flex-start; gap: 10px; }
+  h1 { font-size: 1.35rem; }
+  .card { padding: 15px; }
+
+  .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  .row2 { grid-template-columns: 1fr; }
+
+  .clock { padding: 22px 14px; }
+  .clock .now { font-size: 2.15rem; }
+  .clock .actions .btn { flex: 1; justify-content: center; min-height: 46px; }
+  .punch-meta { gap: 14px 22px; }
+
+  /* tables stay readable: scroll sideways, don't wrap into mush */
+  .card > table, .card > .tbl-scroll { display: block; overflow-x: auto; white-space: nowrap; }
+  table { font-size: .88rem; }
+  th, td { padding: 9px 8px; }
+  td small, .muted.small { white-space: normal; }
+
+  .btn { min-height: 44px; }
+  .btn.sm { min-height: 34px; }
+  .tabs button { padding: 10px 12px; }
+  .modal { padding: 18px; max-height: 88vh; overflow-y: auto; }
+
+  /* login */
+  .login-panel { padding: 26px 18px 40px; }
+  .login-shell { display: block; }
+  .login-shell::before {
+    content: ""; display: block; height: 60px;
+    background: var(--brand) url("./img/logo-white.svg") no-repeat 20px center / auto 24px;
+  }
+}
+
+@media (max-width: 380px) {
+  .nav .links button { font-size: .66rem; }
+}
+
+/* On a 320px screen the logo, the role badge, the avatar and Log out do not
+   fit together. Drop the badge and tighten up rather than letting the bar
+   push the page sideways. */
+@media (max-width: 420px) {
+  .nav { gap: 10px; padding: 0 10px; }
+  #admin-tag, #nav-role-badge { display: none !important; }
+}
