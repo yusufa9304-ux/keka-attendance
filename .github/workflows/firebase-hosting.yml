@@ -25,6 +25,32 @@ jobs:
             echo "Skipping: add the FIREBASE_SERVICE_ACCOUNT secret to publish."
           fi
 
+      # Says plainly what is wrong with the key, without ever printing it. A key
+      # pasted from the wrong file, or pasted half-copied, otherwise fails with a
+      # bare "does not contain a client_email field".
+      - name: Check the key looks like a service account key
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 -c "
+          import json, os
+          raw = os.environ['KEY'].strip()
+          print('length:', len(raw))
+          print('starts with a brace:', raw.startswith('{'))
+          try:
+              d = json.loads(raw)
+          except Exception as e:
+              raise SystemExit('That is not valid JSON: %s' % e)
+          print('type:', d.get('type'))
+          print('project_id:', d.get('project_id'))
+          print('client_email:', 'present' if d.get('client_email') else 'MISSING')
+          print('private_key:', 'present' if d.get('private_key') else 'MISSING')
+          if not d.get('client_email') or not d.get('private_key'):
+              raise SystemExit('Not a service account key: paste the whole JSON file')
+          print('the key looks usable')
+          "
+
       - if: steps.ready.outputs.ok == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
