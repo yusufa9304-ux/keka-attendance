@@ -3,7 +3,7 @@
  * The buttons stay put and only their .active class changes, so the pill can
  * travel between them instead of blinking on and off. A MutationObserver picks
  * the class change up whichever piece of code made it, which is what lets this
- * same file serve the demo and the full-stack console without either of them
+ * same file serve every screen without any of them knowing about it
  * knowing about it.
  *
  * The travel uses the same spring curve as the rest of the app, and collapses
@@ -86,7 +86,7 @@
   window.addEventListener('resize', () => containers().forEach((l) => place(l, false)));
   window.addEventListener('orientationchange', () => containers().forEach((l) => place(l, false)));
 
-  // The demo renders the strip itself, so it asks for a sync once it is done.
+  // The app renders the strip itself, so it asks for a sync once it is done.
   window.syncNavPill = (links) => place(links || document.querySelector('.nav .links'), true);
   window.syncNavPillNow = (links) => place(links || document.querySelector('.nav .links'), false);
 })();
