@@ -221,6 +221,13 @@ td { overflow-wrap: break-word; }
 .login-panel { display: grid; place-items: center; padding: 40px; }
 .login-box { width: 100%; max-width: 380px; }
 .login-box .wm { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+/* The Google button. Deliberately plain: the mark carries the meaning and a
+   coloured button would fight the brand red. */
+.google-btn { width: 100%; justify-content: center; gap: 10px; margin-top: 20px; }
+.google-btn svg { flex: 0 0 auto; }
+.google-btn:disabled { opacity: .6; cursor: default; }
+#login-note.warn { color: #9B0020; font-weight: 600; }
+
 .login-box .wm .wm-logo { height: 36px; width: auto; display: block; }
 .login-box .wm .v { color: var(--brand); }
 .login-box .wm span.sub { color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: 0; border-left: 1px solid var(--line); padding-left: 10px; }

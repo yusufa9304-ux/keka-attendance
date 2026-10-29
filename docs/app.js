@@ -1,9 +1,13 @@
-/* Vutto Attendance — self-contained demo build.
-   Same UI and flows as the full-stack app, but state is kept in the browser
-   (localStorage) so it can run as a static site. No server required. */
+/* Vutto Attendance — the live app.
+ *
+ * All data lives in Supabase. A copy is held in memory so the screens can render
+ * synchronously, exactly as they did before, and every write goes to the
+ * database first: if the database refuses, the screen is not updated.
+ *
+ * What a person may see is decided by row level security in the database, not
+ * here, so this file being readable is harmless.
+ */
 
-/* ----------------------------- store ----------------------------- */
-const LS_KEY = 'vutto_attendance_v1';
 const WORK = { start: '09:30', fullDay: 480, halfDay: 240 };
 
 const todayStr = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -12,125 +16,18 @@ const isWeekend = (ds) => { const g = new Date(ds + 'T00:00:00').getDay(); retur
 const dateRange = (a, b) => { const out = []; let c = a, g = 0; while (c <= b && g++ < 400) { out.push(c); c = addDays(c, 1); } return out; };
 const workingDays = (a, b) => dateRange(a, b).filter((d) => !isWeekend(d)).length || 1;
 
-function seed() {
-  const users = [];
-  const sites = [
-    { id: 1, name: 'Vutto Showroom — Connaught Place', address: 'Connaught Place, New Delhi', lat: 28.6139, lng: 77.2090, radius_m: 250, active: true },
-    { id: 2, name: 'Vutto Showroom — Noida', address: 'Sector 62, Noida', lat: 28.5355, lng: 77.3910, radius_m: 300, active: true },
-    { id: 3, name: 'Vutto Showroom — Gurugram', address: 'Sector 29, Gurugram', lat: 28.4595, lng: 77.0266, radius_m: 300, active: true },
-    { id: 4, name: 'Vutto Hub — Ghaziabad', address: 'Vaishali, Ghaziabad', lat: 28.6692, lng: 77.4538, radius_m: 200, active: true },
-    { id: 5, name: 'Vutto Yard — Dwarka', address: 'Dwarka, New Delhi', lat: 28.5921, lng: 77.0460, radius_m: 400, active: true },
-  ];
-  const mk = (name, email, password, role, department, code, bal, siteId) =>
-    users.push({ id: users.length + 1, name, email, password, role, department, employee_code: code, status: 'active', leave_balance: bal, site_id: siteId ?? null, manager_id: null });
-  mk('Yusuf Admin', 'admin@vutto.demo', 'Admin@123', 'admin', 'HR', 'VUT-0001', 18, 1);
-  mk('Aarav Sharma', 'aarav@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0002', 14, 1);
-  mk('Priya Nair', 'priya@vutto.demo', 'User@123', 'user', 'Sales', 'VUT-0003', 16, 2);
-  mk('Rahul Verma', 'rahul@vutto.demo', 'User@123', 'user', 'Field Sales', 'VUT-0004', 12, null);
-  mk('Sneha Iyer', 'sneha@vutto.demo', 'User@123', 'user', 'Refurb', 'VUT-0005', 18, 3);
+/* Filled by SB.loadAll() once somebody is signed in. Empty until then, which is
+   why nothing renders before the profile arrives. */
+const DB = {
+  users: [], sites: [], attendance: [], leaves: [], regularizations: [],
+  location_pings: [], session: null, me: null,
+};
 
-  // Reporting lines.   Admin -> Aarav, Priya   |   Aarav -> Priya, Rahul   |   Priya -> Sneha
-  const byMail = Object.fromEntries(users.map((x) => [x.email, x]));
-  const link = (who, mgr) => { byMail[who].manager_id = byMail[mgr].id; };
-  link('aarav@vutto.demo', 'admin@vutto.demo');
-  link('priya@vutto.demo', 'aarav@vutto.demo');
-  link('rahul@vutto.demo', 'aarav@vutto.demo');
-  link('sneha@vutto.demo', 'priya@vutto.demo');
-
-  const SITES = [
-    { lat: 28.6139, lng: 77.2090, address: 'Connaught Place, New Delhi' },
-    { lat: 28.5355, lng: 77.3910, address: 'Sector 62, Noida' },
-    { lat: 28.4595, lng: 77.0266, address: 'Sector 29, Gurugram' },
-    { lat: 28.6692, lng: 77.4538, address: 'Vaishali, Ghaziabad' },
-  ];
-  const location_pings = [];
-  let pid = 1;
-  const attendance = [];
-  let aid = 1;
-  const today = todayStr();
-  const emps = users.filter((u) => u.role === 'user');
-  let dayIdx = -1;
-  for (let back = 14; back >= 0; back--) {
-    const date = addDays(today, -back);
-    // Keep today even at a weekend: skipping it left the demo with an empty
-    // Team Today on Saturdays and Sundays, which reads as a broken app.
-    if (isWeekend(date) && back !== 0) continue;
-    dayIdx++;
-    emps.forEach((e, i) => {
-      const absent = back === 6 && i === 2;
-      const half = back === 3 && i === 1;
-      if (absent) { attendance.push({ id: aid++, user_id: e.id, date, clock_in: null, clock_out: null, status: 'absent', worked_minutes: 0, note: 'No show' }); return; }
-      const isToday = back === 0;
-      if (isToday && i === 0) return; // leave one person unpunched so clock-in can be demoed
-      const inH = 9 + (i % 2), inM = (i * 7) % 40;
-      const cin = `${date}T${String(inH).padStart(2, '0')}:${String(inM).padStart(2, '0')}:00`;
-      const outH = half ? 13 : 18, outM = half ? 30 : 15 + ((i * 5) % 30);
-      const cout = isToday ? null : `${date}T${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}:00`;
-      const worked = isToday ? 0 : (outH * 60 + outM) - (inH * 60 + inM);
-      const site = SITES[i % SITES.length];
-      const siteObj = e.site_id ? sites.find((s) => s.id === e.site_id) : null;
-      const offsite = dayIdx === 6 && i === 1;
-      const spoofed = dayIdx === 9 && i === 2;
-      attendance.push({
-        id: aid++, user_id: e.id, date, clock_in: cin, clock_out: cout,
-        status: isToday ? 'present' : (half ? 'half_day' : 'present'), worked_minutes: worked, note: null,
-        in_lat: site.lat, in_lng: site.lng, in_address: site.address, in_photo: null,
-        out_lat: null, out_lng: null, out_address: null, out_photo: null,
-        in_site_id: siteObj ? siteObj.id : null,
-        in_distance_m: siteObj ? (offsite ? 1840 : 30 + ((i * 17) % 90)) : null,
-        in_inside: siteObj ? (offsite ? false : true) : null,
-        in_spoof_score: spoofed ? 70 : 0,
-        in_spoof_flags: spoofed ? ['reported accuracy of 0 m (typical of mock providers)', 'identical coordinates across 5+ readings'] : [],
-      });
-      if (isToday) {
-        for (let k = 1; k <= 3; k++) {
-          location_pings.push({
-            id: pid++, user_id: e.id, date,
-            lat: site.lat + k * 0.0012, lng: site.lng + k * 0.0009,
-            accuracy: 18 + k, address: site.address,
-            captured_at: `${date}T${String(10 + k).padStart(2, '0')}:${String((i * 7 + k * 3) % 60).padStart(2, '0')}:00`,
-            source: 'auto',
-          });
-        }
-      }
-    });
-  }
-
-  const leaves = [
-    { id: 1, user_id: 2, type: 'casual', start_date: addDays(today, 3), end_date: addDays(today, 4), days: 2, reason: 'Family function out of town', status: 'pending', reviewed_at: null },
-    { id: 2, user_id: 3, type: 'sick', start_date: addDays(today, 1), end_date: addDays(today, 1), days: 1, reason: 'Fever, doctor advised rest', status: 'pending', reviewed_at: null },
-  ];
-  const regularizations = [
-    { id: 1, user_id: 4, date: addDays(today, -2), requested_clock_in: `${addDays(today, -2)}T09:35:00`, requested_clock_out: `${addDays(today, -2)}T18:40:00`, reason: 'Forgot to clock out, was on client call', status: 'pending', reviewed_at: null },
-  ];
-
-  return { users, sites, attendance, leaves, regularizations, location_pings, session: null, seq: { u: 6, a: aid, l: 3, r: 2, p: pid, s: 6 } };
+/* Pull the fresh copy and redraw. Every write ends with this. */
+async function reload() {
+  await SB.loadAll();
+  render();
 }
-
-function load() {
-  try { const s = localStorage.getItem(LS_KEY); if (s) return JSON.parse(s); } catch {}
-  const st = seed(); persist(st); return st;
-}
-function persist(st = DB) { try { localStorage.setItem(LS_KEY, JSON.stringify(st)); } catch {} }
-let DB = load();
-DB.location_pings ||= [];
-DB.sites ||= [];
-DB.seq = DB.seq || {};
-DB.seq.s ||= (DB.sites.length + 1);
-DB.seq.p ||= (DB.location_pings.length + 1);
-
-/* Safety net: a demo must never end up with no active admin, or nobody could
-   reach the admin console again. If that happens, restore the demo admin. */
-(function ensureAnActiveAdmin() {
-  if (DB.users.some((u) => u.role === 'admin' && u.status === 'active')) return;
-  const a = DB.users.find((u) => String(u.email).toLowerCase() === 'admin@vutto.demo');
-  if (a) { a.role = 'admin'; a.status = 'active'; }
-  else DB.users.push({
-    id: DB.seq.u++, name: 'Yusuf Admin', email: 'admin@vutto.demo', password: 'Admin@123',
-    role: 'admin', department: 'HR', employee_code: 'VUT-0001', status: 'active', leave_balance: 18,
-  });
-  persist();
-})();
 
 const ui = {
   tab: null, atab: null,
@@ -146,7 +43,7 @@ const initials = (n) => String(n || '?').split(' ').map((w) => w[0]).slice(0, 2)
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—');
 const fmtDate = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const fmtHours = (h) => { if (!h) return '0h 0m'; const H = Math.floor(h), M = Math.round((h - H) * 60); return `${H}h ${M}m`; };
-const me = () => DB.users.find((u) => u.id === DB.session) || null;
+const me = () => DB.me || null;
 
 function toast(msg, isErr = false) {
   let el = document.querySelector('.toast');
@@ -224,17 +121,8 @@ function judge(u, pos) {
   return { geo, spoof };
 }
 
-function addPing(u, date, pos, source = 'auto', at = new Date().toISOString(), verdict = null) {
-  const { geo, spoof } = verdict || judge(u, pos);
-  DB.location_pings.push({
-    id: DB.seq.p++, user_id: u.id, date,
-    lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy ?? null,
-    address: pos.address || null, captured_at: at, source,
-    distance_m: geo ? geo.distance_m : null,
-    inside: geo ? geo.inside : null,
-    spoof_score: spoof.score,
-    spoof_flags: spoof.flags,
-  });
+async function addPing(u, pos) {
+  await SB.ping(u.id, pos.lat, pos.lng, pos.accuracy ?? null);
 }
 
 async function doPunch(kind) {
@@ -255,47 +143,41 @@ async function doPunch(kind) {
         in_spoof_score: spoof.score,
         in_spoof_flags: spoof.flags,
       };
-      if (!r) {
-        DB.attendance.push({
-          id: DB.seq.a++, user_id: u.id, date, clock_in: now, clock_out: null,
-          status: 'present', worked_minutes: 0, note: null,
-          in_lat: proof.lat, in_lng: proof.lng, in_address: proof.address, in_photo: proof.photo,
-          out_lat: null, out_lng: null, out_address: null, out_photo: null,
-          ...geoFields,
-        });
-      } else {
-        Object.assign(r, {
-          clock_in: now, status: 'present', note: null,
-          in_lat: proof.lat, in_lng: proof.lng, in_address: proof.address, in_photo: proof.photo,
-          ...geoFields,
-        });
-      }
-      addPing(u, date, proof, 'punch', now, { geo, spoof });
+      await SB.punch({
+        userId: u.id, kind,
+        lat: proof.lat, lng: proof.lng, address: proof.address,
+        siteId: geo ? geo.site_id : null,
+        inside: geo ? geo.inside : null,
+        photoRef: proof.photo || null,
+        photoStore: proof.photo ? 'inline' : null,
+        spoof,
+      });
+      await addPing(u, date, proof, 'punch', now, { geo, spoof });
       toast('Clocked in — photo + location saved');
     } else {
       const r = todayRow(u.id);
       if (!r || !r.clock_in) { toast('You need to clock in first', true); return render(); }
       if (r.clock_out) { toast('You have already clocked out today', true); return render(); }
-      Object.assign(r, {
-        clock_out: now,
-        worked_minutes: Math.max(0, Math.round((new Date(now) - new Date(r.clock_in)) / 60000)),
-        status: null, // set just below
-        out_lat: proof.lat, out_lng: proof.lng, out_address: proof.address, out_photo: proof.photo,
-        out_site_id: geo ? geo.site_id : null,
-        out_distance_m: geo ? geo.distance_m : null,
-        out_inside: geo ? geo.inside : null,
-        out_spoof_score: spoof.score,
-        out_spoof_flags: spoof.flags,
+      const worked = Math.max(0, Math.round((new Date(now) - new Date(r.clock_in)) / 60000));
+      await SB.punch({
+        userId: u.id, kind,
+        lat: proof.lat, lng: proof.lng, address: proof.address,
+        siteId: geo ? geo.site_id : null,
+        inside: geo ? geo.inside : null,
+        photoRef: proof.photo || null,
+        photoStore: proof.photo ? 'inline' : null,
+        spoof,
+        workedMinutes: worked,
+        status: worked < WORK.halfDay ? 'half_day' : 'present',
       });
-      r.status = r.worked_minutes < WORK.halfDay ? 'half_day' : 'present';
-      addPing(u, date, proof, 'punch', now, { geo, spoof });
+      await addPing(u, date, proof, 'punch', now, { geo, spoof });
       toast('Clocked out — photo + location saved');
     }
 
     if (geo && !geo.inside) toast(VUTTO_GEO.describeGeofence(geo), true);
     else if (spoof.suspected) toast('Heads up: your location looked unusual — this punch is flagged for review.', true);
 
-    persist(); render();
+    await reload();
   } catch (err) {
     toast(err.message, true);
     render();
@@ -309,8 +191,7 @@ function startTracking() {
   if (tracker) return;
   tracker = CAPTURE.startTracking(PING_MIN, async (pos) => {
     const u = me(); if (!u) return;
-    addPing(u, todayStr(), pos, 'auto');
-    persist();
+    try { await addPing(u, pos); } catch (e) { console.warn('location update failed', e.message); }
   });
 }
 function stopTracking() { if (tracker) { tracker.stop(); tracker = null; } }
@@ -353,68 +234,59 @@ function usedLeave(uid) {
   return DB.leaves.filter((l) => l.user_id === uid && l.status === 'approved' && l.type !== 'unpaid' && l.start_date.slice(0, 4) === y)
     .reduce((a, l) => a + l.days, 0);
 }
-function applyLeave(body) {
+async function applyLeave(body) {
   const u = me();
   if (!body.start_date || !body.end_date) return toast('Please pick both dates', true);
   if (body.end_date < body.start_date) return toast('End date cannot be before start date', true);
   const days = workingDays(body.start_date, body.end_date);
-  DB.leaves.push({ id: DB.seq.l++, user_id: u.id, type: body.type, start_date: body.start_date, end_date: body.end_date, days, reason: body.reason || null, status: 'pending', reviewed_at: null });
-  persist(); toast(`Leave request submitted (${days} day${days > 1 ? 's' : ''})`); render();
+  try {
+    await SB.applyLeave(u.id, body.type, body.start_date, body.end_date, body.reason || null);
+    toast(`Leave request submitted (${days} day${days > 1 ? 's' : ''})`);
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
-function cancelLeave(id) {
+async function cancelLeave(id) {
   const u = me();
   const l = DB.leaves.find((x) => x.id === id && x.user_id === u.id);
   if (!l) return;
   if (l.status !== 'pending') return toast('Only pending requests can be cancelled', true);
-  DB.leaves = DB.leaves.filter((x) => x.id !== id);
-  persist(); toast('Request cancelled'); render();
+  try {
+    await SB.cancelLeave(id);
+    toast('Request cancelled');
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
-function raiseReg(body) {
+async function raiseReg(body) {
   const u = me();
   if (!body.date || !body.reason) return toast('Date and reason are required', true);
-  DB.regularizations.push({
-    id: DB.seq.r++, user_id: u.id, date: body.date,
-    requested_clock_in: body.in ? `${body.date}T${body.in}:00` : null,
-    requested_clock_out: body.out ? `${body.date}T${body.out}:00` : null,
-    reason: body.reason, status: 'pending', reviewed_at: null,
-  });
-  persist(); toast('Regularization request submitted'); render();
+  try {
+    await SB.raiseRegularization(u.id, body.date, body.in || null, body.out || null, body.reason);
+    toast('Regularization request submitted');
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
 
-function reviewLeave(id, action) {
+async function reviewLeave(id, action) {
   const l = DB.leaves.find((x) => x.id === id);
   if (!l || l.status !== 'pending') return toast('This request has already been reviewed', true);
   if (!canActFor(me(), l.user_id)) return toast('This request is not in your team', true);
-  l.status = action === 'approve' ? 'approved' : 'rejected';
-  l.reviewed_at = new Date().toISOString();
-  if (l.status === 'approved') {
-    const u = DB.users.find((x) => x.id === l.user_id);
-    if (u && l.type !== 'unpaid') u.leave_balance = +(u.leave_balance - l.days).toFixed(1);
-    for (const d of dateRange(l.start_date, l.end_date)) {
-      if (isWeekend(d)) continue;
-      let r = DB.attendance.find((a) => a.user_id === l.user_id && a.date === d);
-      if (r) { r.status = 'on_leave'; r.clock_in = null; r.clock_out = null; r.worked_minutes = 0; }
-      else DB.attendance.push({ id: DB.seq.a++, user_id: l.user_id, date: d, clock_in: null, clock_out: null, status: 'on_leave', worked_minutes: 0, note: null });
-    }
-  }
-  persist(); toast(`Leave ${l.status === 'approved' ? 'approved' : 'rejected'}`); render();
+  const next = action === 'approve' ? 'approved' : 'rejected';
+  try {
+    await SB.decideLeave(l.id, next);
+    toast(`Leave ${next}`);
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
-function reviewReg(id, action) {
+async function reviewReg(id, action) {
   const r = DB.regularizations.find((x) => x.id === id);
   if (!r || r.status !== 'pending') return toast('This request has already been reviewed', true);
   if (!canActFor(me(), r.user_id)) return toast('This request is not in your team', true);
-  r.status = action === 'approve' ? 'approved' : 'rejected';
-  r.reviewed_at = new Date().toISOString();
-  if (r.status === 'approved') {
-    const worked = r.requested_clock_in && r.requested_clock_out
-      ? Math.max(0, Math.round((new Date(r.requested_clock_out) - new Date(r.requested_clock_in)) / 60000)) : 0;
-    let a = DB.attendance.find((x) => x.user_id === r.user_id && x.date === r.date);
-    if (!a) { a = { id: DB.seq.a++, user_id: r.user_id, date: r.date, clock_in: null, clock_out: null, status: 'present', worked_minutes: 0, note: null }; DB.attendance.push(a); }
-    if (r.requested_clock_in) a.clock_in = r.requested_clock_in;
-    if (r.requested_clock_out) a.clock_out = r.requested_clock_out;
-    a.worked_minutes = worked; a.status = 'present'; a.note = 'Regularized';
-  }
-  persist(); toast(`Regularization ${r.status === 'approved' ? 'approved' : 'rejected'}`); render();
+  const next = action === 'approve' ? 'approved' : 'rejected';
+  try {
+    await SB.decideRegularization(r.id, next);
+    toast(`Regularization ${next}`);
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
 function nextEmployeeCode() {
   let max = 0;
@@ -425,18 +297,28 @@ function nextEmployeeCode() {
   return `VUT-${String(max + 1).padStart(4, '0')}`;
 }
 
-function addEmployee(body) {
-  if (!body.name || !body.email || !body.password) return toast('Name, email and password are required', true);
+/* No password column any more: people sign in with Google, and the admin adding
+   the address here is what lets them in. The employee code is issued by the
+   database so two admins adding someone at once cannot collide. */
+async function addEmployee(body) {
+  if (!body.name || !body.email) return toast('Name and email are required', true);
   if (DB.users.some((u) => u.email.toLowerCase() === body.email.toLowerCase())) return toast('An account with this email already exists', true);
-  DB.users.push({
-    id: DB.seq.u++, name: body.name, email: body.email, password: body.password,
-    role: body.role || 'user', department: body.department || null,
-    employee_code: nextEmployeeCode(), status: 'active', leave_balance: body.leave_balance ?? 18,
-    site_id: body.site_id ?? null,
-  });
-  persist(); toast('Employee created'); closeModal(); render();
+  try {
+    await SB.saveEmployee({
+      name: body.name,
+      email: String(body.email).toLowerCase(),
+      role: body.role || 'user',
+      department: body.department || null,
+      leave_balance: body.leave_balance ?? 18,
+      site_id: body.site_id ?? null,
+      manager_id: body.manager_id ?? null,
+    });
+    toast('Employee added — they can sign in with Google now');
+    closeModal();
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
-function setManager(id, managerId) {
+async function setManager(id, managerId) {
   if (managerId === id) return toast('Someone cannot report to themselves', true);
   // Walk the chain up: the new manager must not report back to this person.
   let cur = managerId, hops = 0;
@@ -446,11 +328,14 @@ function setManager(id, managerId) {
   }
   const e = DB.users.find((x) => x.id === id);
   if (!e) return;
-  e.manager_id = managerId;
-  persist(); toast(managerId ? 'Reporting manager updated' : 'Reporting manager cleared'); render();
+  try {
+    await SB.saveEmployee({ manager_id: managerId }, id);
+    toast(managerId ? 'Reporting manager updated' : 'Reporting manager cleared');
+    await reload();
+  } catch (err) { toast(err.message, true); }
 }
 
-function patchEmployee(id, patch) {
+async function patchEmployee(id, patch) {
   const u = DB.users.find((x) => x.id === id);
   if (!u) return;
   // Never let an admin lock themselves out of the admin console.
@@ -459,8 +344,11 @@ function patchEmployee(id, patch) {
     if (patch.role && patch.role !== 'admin') return toast("You can't change your own role — ask another admin.", true);
     if (patch.status && patch.status !== 'active') return toast("You can't deactivate your own account.", true);
   }
-  Object.assign(u, patch);
-  persist(); toast('Employee updated'); render();
+  try {
+    await SB.saveEmployee(patch, id);
+    toast('Employee updated');
+    await reload();
+  } catch (err) { toast(err.message, true); }
 }
 
 /* ----------------------------- rendering ----------------------------- */
@@ -936,27 +824,37 @@ function downloadBytes(bytes, filename, type) {
 }
 
 /* ---- sites ---- */
-function toggleSite(id) {
+async function toggleSite(id) {
   const s = DB.sites.find((x) => x.id === id);
   if (!s) return;
-  s.active = s.active === false;
-  persist(); toast(s.active === false ? 'Site deactivated' : 'Site activated'); render();
+  const next = s.active === false;
+  try {
+    await SB.saveSite({ active: next }, id);
+    toast(next ? 'Site activated' : 'Site deactivated');
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
-function deleteSite(id) {
+async function deleteSite(id) {
   if (!window.confirm('Delete this site? Its employees become field staff.')) return;
-  DB.sites = DB.sites.filter((s) => s.id !== id);
-  for (const u of DB.users) if (u.site_id === id) u.site_id = null;
-  persist(); toast('Site deleted'); render();
+  try {
+    await SB.deleteSite(id);
+    toast('Site deleted');
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
-function addSite(body) {
+async function addSite(body) {
   if (!body.name) return toast('A name is required', true);
   const lat = Number(body.lat), lng = Number(body.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return toast('Latitude and longitude are required', true);
-  DB.sites.push({
-    id: DB.seq.s++, name: body.name, address: body.address || null,
-    lat, lng, radius_m: Number(body.radius_m) || 250, active: true,
-  });
-  persist(); toast('Site added'); closeModal(); render();
+  try {
+    await SB.saveSite({
+      name: body.name, address: body.address || null,
+      lat, lng, radius_m: Number(body.radius_m) || 250, active: true,
+    });
+    toast('Site added');
+    closeModal();
+    await reload();
+  } catch (e) { toast(e.message, true); }
 }
 function openAddSite() {
   openModal(`<h2>Add site</h2>
@@ -1043,22 +941,77 @@ document.getElementById('nav-links').addEventListener('click', (e) => {
 document.getElementById('main').addEventListener('click', (e) => {
   const t = e.target.closest('button[data-atab]'); if (t) { ui.atab = t.dataset.atab; render(); }
 });
-document.getElementById('logout').onclick = () => { stopTracking(); DB.session = null; persist(); ui.tab = null; render(); };
+/* ---------------- view switching ---------------- */
+function showSignedOut(note) {
+  document.getElementById('app-view').classList.add('hidden');
+  document.getElementById('login-view').classList.remove('hidden');
+  const n = document.getElementById('login-note');
+  if (n) {
+    n.textContent = note || 'Continue with your Vutto Google account.';
+    n.classList.toggle('warn', !!note);
+  }
+}
+function showSignedIn() {
+  document.getElementById('login-view').classList.add('hidden');
+  document.getElementById('app-view').classList.remove('hidden');
+}
 
-document.getElementById('login-form').onsubmit = (e) => {
-  e.preventDefault();
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const u = DB.users.find((x) => x.email.toLowerCase() === email.toLowerCase() && x.password === password);
-  if (!u) return toast('Invalid email or password', true);
-  if (u.status !== 'active') return toast('This account has been deactivated. Contact your admin.', true);
-  DB.session = u.id; persist();
-  // Reset any stale tab from a previous session so the right console opens.
-  ui.tab = u.role === 'admin' ? 'team' : 'home';   // managers land on their own day, with a My Team tab
-  ui.atab = 'leaves';
-  render();
+/* ---------------- signing in and out ---------------- */
+document.getElementById('logout').onclick = async () => {
+  stopTracking();
+  DB.me = null;
+  ui.tab = null;
+  await SB.signOut();
+  showSignedOut();
 };
-document.getElementById('fill-admin').onclick = () => { document.getElementById('email').value = 'admin@vutto.demo'; document.getElementById('password').value = 'Admin@123'; };
-document.getElementById('fill-user').onclick = () => { document.getElementById('email').value = 'aarav@vutto.demo'; document.getElementById('password').value = 'User@123'; };
 
-render();
+const gbtn = document.getElementById('google-signin');
+if (gbtn) gbtn.onclick = () => {
+  gbtn.disabled = true;
+  SB.signInWithGoogle().catch((err) => { gbtn.disabled = false; toast(err.message, true); });
+};
+
+/* ---------------- boot ----------------
+ * Strict sign-in: a Google account only gets in if an admin has already added
+ * that address. Anyone else is signed straight back out with a clear reason,
+ * rather than being left staring at an empty console.
+ */
+async function enterApp() {
+  const profile = await SB.me();
+  if (!profile) {
+    await SB.signOut();
+    showSignedOut('That account is not on the Vutto Attendance list yet. Ask an admin to add you, then try again.');
+    return;
+  }
+  if (profile.status !== 'active') {
+    await SB.signOut();
+    showSignedOut('Your account has been deactivated. Contact your admin.');
+    return;
+  }
+  DB.me = profile;
+  ui.tab = profile.role === 'admin' ? 'team' : 'home';
+  ui.atab = 'leaves';
+  await SB.loadAll();
+  showSignedIn();
+  render();
+}
+
+async function boot() {
+  try {
+    const session = await SB.session();
+    if (session) await enterApp();
+    else showSignedOut();
+  } catch (err) {
+    showSignedOut('Could not reach the server. Check your connection and reload.');
+    console.error(err);
+  }
+}
+
+/* Google hands control back to this page, so the session can also appear
+   without a reload. */
+SB.onAuthChange((session) => {
+  if (session && !DB.me) enterApp();
+  if (!session && DB.me) { DB.me = null; showSignedOut(); }
+});
+
+boot();

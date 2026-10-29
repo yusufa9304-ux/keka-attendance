@@ -87,7 +87,7 @@
      * Each of these returns the row the database actually stored, so the screen
      * can trust it rather than guessing.
      */
-    async punch({ userId, kind, lat, lng, address, siteId, inside, photoRef, photoStore, spoof }) {
+    async punch({ userId, kind, lat, lng, address, siteId, inside, photoRef, photoStore, spoof, workedMinutes, status }) {
       const date = todayStr();
       const { data: existing } = await client.from('attendance').select('id')
         .eq('user_id', userId).eq('work_date', date).maybeSingle();
@@ -99,6 +99,7 @@
             in_photo_ref: photoRef, in_photo_store: photoStore,
             spoof_score: spoof ? spoof.score : null, spoof_reasons: spoof ? spoof.reasons : null }
         : { user_id: userId, work_date: date, clock_out: stamp,
+            worked_minutes: workedMinutes ?? null, status: status || 'present',
             out_lat: lat, out_lng: lng, out_address: address, out_site_id: siteId, out_inside: inside,
             out_photo_ref: photoRef, out_photo_store: photoStore };
 
@@ -132,11 +133,21 @@
       return data;
     },
 
-    async decide(kind, id, status, byId) {
-      const table = kind === 'leave' ? 'leaves' : 'regularizations';
-      const { data, error } = await client.from(table)
-        .update({ status, decided_by: byId, decided_at: new Date().toISOString() })
-        .eq('id', id).select().single();
+    /* Approving a leave also moves the balance and writes the affected days, so
+       the database does the whole thing rather than the browser making several
+       calls that could half-apply. */
+    async cancelLeave(id) {
+      const { error } = await client.from('leaves').delete().eq('id', id);
+      if (error) fail(error);
+    },
+
+    async decideLeave(id, status) {
+      const { data, error } = await client.rpc('decide_leave', { p_id: id, p_status: status });
+      if (error) fail(error);
+      return data;
+    },
+    async decideRegularization(id, status) {
+      const { data, error } = await client.rpc('decide_regularization', { p_id: id, p_status: status });
       if (error) fail(error);
       return data;
     },
@@ -157,6 +168,13 @@
       const { data, error } = await q;
       if (error) fail(error);
       return data;
+    },
+
+    async deleteSite(id) {
+      const { error: e1 } = await client.from('employees').update({ site_id: null }).eq('site_id', id);
+      if (e1) fail(e1);
+      const { error: e2 } = await client.from('sites').delete().eq('id', id);
+      if (e2) fail(e2);
     },
 
     async setSetting(key, value) {
