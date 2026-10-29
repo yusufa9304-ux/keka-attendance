@@ -15,10 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The key is passed through env, never pasted into the script. A service
+      # account key is pretty-printed JSON with quotes and newlines in it, and
+      # substituting that straight into a shell command breaks the command - it
+      # reads as empty, so the publish silently skips.
       - name: Is the key in place?
         id: ready
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          if [ -n "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+          if [ -n "$KEY" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"
