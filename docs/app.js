@@ -22,6 +22,9 @@ const DB = {
   users: [], sites: [], attendance: [], leaves: [], regularizations: [],
   location_pings: [], session: null, me: null,
 };
+/* sb.js is a separate script and fills this, and a top-level const is not a
+   property of window on its own. */
+window.DB = DB;
 
 /* Pull the fresh copy and redraw. Every write ends with this. */
 async function reload() {
@@ -1002,8 +1005,10 @@ async function boot() {
     if (session) await enterApp();
     else showSignedOut();
   } catch (err) {
-    showSignedOut('Could not reach the server. Check your connection and reload.');
+    // Not necessarily the network: anything thrown while loading the profile
+    // lands here, so say what actually happened instead of blaming the wifi.
     console.error(err);
+    showSignedOut('Something went wrong while signing you in. Tap "Reset it" below, then try again.');
   }
 }
 

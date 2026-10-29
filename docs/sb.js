@@ -74,6 +74,7 @@
 
       // keep the names the screens already use
       const db = window.DB;
+      if (!db) throw new Error('The app did not finish starting up.');
       db.sites = sites.data || [];
       db.users = people.data || [];
       db.attendance = attendance.data || [];
