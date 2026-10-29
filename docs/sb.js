@@ -22,6 +22,52 @@
   const monthStart = () => todayStr().slice(0, 7) + '-01';
   const fail = (error) => { throw new Error(error.message || String(error)); };
 
+  /* ---- database row -> the shape the screens read ---- */
+  const weekdays = (a, b) => {
+    let n = 0;
+    for (let d = new Date(a + 'T00:00:00'); d <= new Date(b + 'T00:00:00'); d.setDate(d.getDate() + 1)) {
+      const g = d.getDay();
+      if (g !== 0 && g !== 6) n++;
+    }
+    return Math.max(1, n);
+  };
+
+  const shapeAttendance = (r) => ({
+    ...r,
+    date: r.work_date,
+    in_photo: r.in_photo_ref,
+    out_photo: r.out_photo_ref,
+    in_spoof_score: r.spoof_score || 0,
+    in_spoof_flags: r.spoof_reasons || [],
+    out_spoof_score: 0,
+    out_spoof_flags: [],
+    in_distance_m: null,
+    out_distance_m: null,
+    // the screens ask for 'on_leave'; the database stores 'leave'
+    status: r.status === 'leave' ? 'on_leave' : r.status,
+  });
+
+  const shapeLeave = (r) => ({
+    ...r,
+    type: r.kind,
+    reviewed_at: r.decided_at,
+    days: weekdays(r.start_date, r.end_date),
+  });
+
+  const shapeRegularization = (r) => ({
+    ...r,
+    date: r.work_date,
+    requested_clock_in: r.in_time,
+    requested_clock_out: r.out_time,
+    reviewed_at: r.decided_at,
+  });
+
+  const shapePing = (r) => ({
+    ...r,
+    date: r.work_date,
+    captured_at: r.at,
+  });
+
   const SB = {
     client,
     todayStr,
@@ -72,15 +118,17 @@
       ]);
       for (const r of [sites, people, attendance, leaves, regs, pings]) if (r.error) fail(r.error);
 
-      // keep the names the screens already use
+      // The database names columns for clarity (work_date, in_photo_ref); the
+      // screens were written against shorter names. Translate once here rather
+      // than scatter both spellings through the interface.
       const db = window.DB;
       if (!db) throw new Error('The app did not finish starting up.');
       db.sites = sites.data || [];
       db.users = people.data || [];
-      db.attendance = attendance.data || [];
-      db.leaves = leaves.data || [];
-      db.regularizations = regs.data || [];
-      db.location_pings = pings.data || [];
+      db.attendance = (attendance.data || []).map(shapeAttendance);
+      db.leaves = (leaves.data || []).map(shapeLeave);
+      db.regularizations = (regs.data || []).map(shapeRegularization);
+      db.location_pings = (pings.data || []).map(shapePing);
       return db;
     },
 
