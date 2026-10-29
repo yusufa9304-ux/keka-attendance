@@ -13,14 +13,14 @@
 <link rel="manifest" href="./manifest.webmanifest" />
 <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" />
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-<link rel="stylesheet" href="./style.css?v=23" />
+<link rel="stylesheet" href="./style.css?v=24" />
 </head>
 <body>
 <!-- ============================ LOGIN ============================ -->
 <div id="login-view">
   <div class="login-shell">
     <div class="login-hero">
-      <img src="./img/logo-white.svg?v=23" alt="Vutto" class="hero-logo-img" />
+      <img src="./img/logo-white.svg?v=24" alt="Vutto" class="hero-logo-img" />
       <h1>Clock in. Ride out.</h1>
       <p>The Vutto attendance desk — punch in and out, apply for leave, and track your month, while admins see the whole team live.</p>
       <ul>
@@ -32,7 +32,7 @@
     </div>
     <div class="login-panel">
       <div class="login-box">
-        <div class="wm"><img src="./img/logo.svg?v=23" alt="Vutto" class="wm-logo" /><span class="sub">Attendance</span></div>
+        <div class="wm"><img src="./img/logo.svg?v=24" alt="Vutto" class="wm-logo" /><span class="sub">Attendance</span></div>
         <h1>Sign in</h1>
         <p class="muted small">Use your work email to continue.</p>
         <button class="btn primary google-btn" id="google-signin" type="button">
@@ -55,7 +55,7 @@
 <div id="app-view" class="hidden">
   <nav class="nav">
     <div class="brand">
-      <img src="./img/logo.svg?v=23" alt="Vutto" class="brand-logo" />
+      <img src="./img/logo.svg?v=24" alt="Vutto" class="brand-logo" />
       <span class="brand-sub">Attendance</span>
       <span class="badge role-admin hidden" id="admin-tag" style="margin-left:4px">Admin</span>
     </div>
@@ -78,14 +78,14 @@
 </div>
 
 <div class="modal-bg" id="modal"><div class="modal" id="modal-body"></div></div>
-<script src="./config.js?v=23"></script>
+<script src="./config.js?v=24"></script>
 <script src="./vendor/supabase.js"></script>
-<script src="./sb.js?v=23"></script>
-<script src="./geo.js?v=23"></script>
-<script src="./xlsx.js?v=23"></script>
-<script src="./capture.js?v=23"></script>
-<script src="./navpill.js?v=23"></script>
-  <script src="./app.js?v=23"></script>
+<script src="./sb.js?v=24"></script>
+<script src="./geo.js?v=24"></script>
+<script src="./xlsx.js?v=24"></script>
+<script src="./capture.js?v=24"></script>
+<script src="./navpill.js?v=24"></script>
+  <script src="./app.js?v=24"></script>
 <script>
   // Installable app: register the service worker.
   // The worker URL is versioned so an updated worker is always fetched, and we
@@ -97,7 +97,7 @@
       if (hadController && !reloading) { reloading = true; location.reload(); }
     });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js?v=23').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=24').catch(() => {});
     });
   }
   // If the app throws, show it instead of a blank screen.

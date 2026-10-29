@@ -960,12 +960,15 @@ function showSignedIn() {
 }
 
 /* ---------------- signing in and out ---------------- */
-document.getElementById('logout').onclick = async () => {
+document.getElementById('logout').onclick = () => {
+  // Show the way out at once. Waiting on the network first meant a failed or
+  // slow sign-out call left the console sitting there, looking like the button
+  // did nothing at all.
   stopTracking();
   DB.me = null;
   ui.tab = null;
-  await SB.signOut();
   showSignedOut();
+  SB.signOut().catch((err) => console.warn('sign-out call failed', err && err.message));
 };
 
 const gbtn = document.getElementById('google-signin');

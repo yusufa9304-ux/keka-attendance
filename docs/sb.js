@@ -90,7 +90,16 @@
       if (error) fail(error);
     },
     async signOut() {
-      await client.auth.signOut();
+      try {
+        // 'local' clears the stored session without waiting on the server
+        await client.auth.signOut({ scope: 'local' });
+      } catch (err) {
+        // Even when that call fails, drop what is on the device, so a reload
+        // cannot quietly sign the same person straight back in.
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith('sb-') || k.includes('auth-token'))
+          .forEach((k) => localStorage.removeItem(k));
+      }
     },
 
     /* ---------------- who am I ----------------
