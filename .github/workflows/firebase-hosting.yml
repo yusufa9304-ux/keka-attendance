@@ -1,7 +1,8 @@
 # Publishes the site to Firebase Hosting on every push to main.
 #
-# It stays quiet until the key is added: if the FIREBASE_SERVICE_ACCOUNT secret
-# is missing the run simply skips, rather than showing a red cross on the repo.
+# The key is handed to the steps through env, never pasted into a shell command:
+# a service account key is pretty-printed JSON, and substituting that straight
+# into a command breaks the command.
 name: Publish to Firebase Hosting
 
 on:
@@ -15,52 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The key is passed through env, never pasted into the script. A service
-      # account key is pretty-printed JSON with quotes and newlines in it, and
-      # substituting that straight into a shell command breaks the command - it
-      # reads as empty, so the publish silently skips.
-      - name: Is the key in place?
-        id: ready
+      - name: Prepare the key
+        id: key
         env:
           KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          if [ -n "$KEY" ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping: add the FIREBASE_SERVICE_ACCOUNT secret to publish."
-          fi
+        run: python3 .github/scripts/prepare-key.py
 
-      # Says plainly what is wrong with the key, without ever printing it. A key
-      # pasted from the wrong file, or pasted half-copied, otherwise fails with a
-      # bare "does not contain a client_email field".
-      - name: Check the key looks like a service account key
-        if: steps.ready.outputs.ok == 'true'
+      - name: Publish
+        if: steps.key.outputs.ok == 'true'
         env:
-          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          python3 -c "
-          import json, os
-          raw = os.environ['KEY'].strip()
-          print('length:', len(raw))
-          print('starts with a brace:', raw.startswith('{'))
-          try:
-              d = json.loads(raw)
-          except Exception as e:
-              raise SystemExit('That is not valid JSON: %s' % e)
-          print('type:', d.get('type'))
-          print('project_id:', d.get('project_id'))
-          print('client_email:', 'present' if d.get('client_email') else 'MISSING')
-          print('private_key:', 'present' if d.get('private_key') else 'MISSING')
-          if not d.get('client_email') or not d.get('private_key'):
-              raise SystemExit('Not a service account key: paste the whole JSON file')
-          print('the key looks usable')
-          "
-
-      - if: steps.ready.outputs.ok == 'true'
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          channelId: live
-          projectId: vutto-attendance
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/key.json
+        run: npx --yes firebase-tools@latest deploy --only hosting --project vutto-attendance --non-interactive
